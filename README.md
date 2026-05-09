@@ -246,23 +246,33 @@ Something demonstrable at each stage:
 
 ---
 
-## Relationship to Recut AI
-
-- **fuzzd** — finds vulnerabilities *before* deployment (pre-prod, CI/CD gate)
-- **Recut AI** — monitors and audits agent behavior *during* deployment (runtime observability)
-
-Together they cover the full security and reliability surface of an agentic system.
-
----
-
 ## Contributing
 
-The corpus grows as a community artifact. To contribute a new attack record:
+**fuzzd is an early-stage open security tool and contributions are actively welcome.** The attack surface for agentic AI is evolving fast — no single team can keep up with it alone.
 
-1. Derive the attack pattern from published research (with citation)
-2. Fill out the full AttackRecord schema
-3. Run `fuzzd corpus validate ./my-attack.json`
-4. Open a PR — new findings become new corpus entries
+### Ways to contribute
+
+**Add attack corpus records** — The corpus is the highest-leverage contribution. Each record encodes a known attack pattern as a reproducible test case, derived from published research. New paradigms, new vectors, and new real-world findings all belong here.
+
+1. Derive the pattern from published research (cite the source in `source` and `source_url`)
+2. Fill out the full `AttackRecord` schema (see `corpus/tool_poisoning/TPA-001.json` as a template)
+3. Validate it: `fuzzd corpus validate ./my-attack.json`
+4. Open a PR targeting `corpus/` — new findings become new entries in the seed corpus
+
+**Build fuzzer modules** — The v0.3–v0.6 modules (description scanner, argument fuzzer, chain fuzzer, protocol fuzzer) are where the real detection logic lives. See the open issues for scope and starting points.
+
+**Test against real MCP servers** — Run fuzzd against an MCP server you maintain or have permission to test. File issues for false positives, missed detections, or UX friction.
+
+**Improve detection signals** — Add pattern libraries, tune heuristics, or extend the severity scoring model. Good signals are what turn raw findings into actionable reports.
+
+### Ground rules
+
+- All corpus records must cite a published source. No unsourced payloads.
+- No live infrastructure in tests — all unit tests use `MockTransport`.
+- Run `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` before opening a PR.
+- For large changes, open an issue first to align on direction.
+
+If you're unsure where to start, the open issues are tagged by milestone. Pick anything in the current milestone — every PR moves the needle.
 
 ---
 
