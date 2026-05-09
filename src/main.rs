@@ -15,6 +15,8 @@ mod utils;
 
 use cli::{Cli, Command, CorpusAction};
 use corpus::{Category, Corpus, Severity};
+use fuzzer::description::DescriptionScanner;
+use protocol::mcp::ListToolsResult;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,8 +35,34 @@ async fn main() -> Result<()> {
             eprintln!("(fuzzer modules not yet implemented — coming in v0.3+)");
         }
         Command::Scan(args) => {
-            eprintln!("scan: schema={}", args.schema.display());
-            eprintln!("(description scanner not yet implemented — coming in v0.3)");
+            let src = std::fs::read_to_string(&args.schema)?;
+            // Accept either a bare array or the MCP tools/list envelope {tools: [...]}
+            let tools = serde_json::from_str::<ListToolsResult>(&src)
+                .map(|r| r.tools)
+                .or_else(|_| serde_json::from_str(&src))?;
+
+            let findings = DescriptionScanner::scan(&tools);
+
+            if findings.is_empty() {
+                println!("No issues found in {} tool(s).", tools.len());
+            } else {
+                println!(
+                    "{} finding(s) in {} tool(s):\n",
+                    findings.len(),
+                    tools.len()
+                );
+                for f in &findings {
+                    println!(
+                        "[{}] {} — {} ({})",
+                        f.severity, f.tool_name, f.signal, f.detail
+                    );
+                    println!("  matched: {}", f.matched_text);
+                    if !f.corpus_refs.is_empty() {
+                        println!("  refs:    {}", f.corpus_refs.join(", "));
+                    }
+                    println!();
+                }
+            }
         }
         Command::Corpus(args) => {
             let mut corpus = Corpus::embedded();
