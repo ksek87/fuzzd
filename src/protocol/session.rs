@@ -6,15 +6,9 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::protocol::mcp::{
     methods, CallToolParams, CallToolResult, InitializeParams, InitializeResult, JsonRpcRequest,
-    ListToolsResult, ToolDefinition,
+    ListToolsResult, ResponseOutcome, ToolDefinition,
 };
 use crate::protocol::transport::Transport;
-
-static REQUEST_COUNTER: AtomicI64 = AtomicI64::new(1);
-
-fn next_id() -> i64 {
-    REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed)
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SessionState {
@@ -25,8 +19,9 @@ pub enum SessionState {
 }
 
 pub struct Session<T: Transport> {
-    transport: T,
+    pub(crate) transport: T,
     pub(crate) state: SessionState,
+    counter: AtomicI64,
     pub server_info: Option<InitializeResult>,
     pub tools: Vec<ToolDefinition>,
 }
@@ -36,9 +31,14 @@ impl<T: Transport> Session<T> {
         Self {
             transport,
             state: SessionState::Unconnected,
+            counter: AtomicI64::new(1),
             server_info: None,
             tools: Vec::new(),
         }
+    }
+
+    fn next_id(&self) -> i64 {
+        self.counter.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Drive the initialize → initialized handshake and enumerate tools.
@@ -55,20 +55,19 @@ impl<T: Transport> Session<T> {
         };
 
         let req = JsonRpcRequest::new(
-            next_id(),
+            self.next_id(),
             methods::INITIALIZE,
             Some(serde_json::to_value(params)?),
         );
 
         let resp = self.transport.send(req).await?;
-        let result_value = resp.outcome.into_result()?;
-        self.server_info = Some(serde_json::from_value::<InitializeResult>(result_value)?);
+        self.server_info = Some(serde_json::from_value::<InitializeResult>(outcome_result(
+            resp.outcome,
+        )?)?);
 
-        // Send the initialized notification (no response expected)
-        let notif = JsonRpcRequest::new(next_id(), methods::INITIALIZED, None);
-        // Notifications don't get a response — fire and forget via the underlying write
-        // We send it but don't await a response (the server won't send one)
-        let _ = self.transport.send(notif).await; // ignore timeout — no response expected
+        // Notifications have no response — use notify() to avoid blocking on a reply.
+        let notif = JsonRpcRequest::new(self.next_id(), methods::INITIALIZED, None);
+        self.transport.notify(notif).await?;
 
         self.state = SessionState::Ready;
         Ok(())
@@ -78,10 +77,9 @@ impl<T: Transport> Session<T> {
     pub async fn list_tools(&mut self) -> Result<Vec<ToolDefinition>> {
         self.require_ready()?;
 
-        let req = JsonRpcRequest::new(next_id(), methods::TOOLS_LIST, None);
+        let req = JsonRpcRequest::new(self.next_id(), methods::TOOLS_LIST, None);
         let resp = self.transport.send(req).await?;
-        let result_value = resp.outcome.into_result()?;
-        let list: ListToolsResult = serde_json::from_value(result_value)?;
+        let list: ListToolsResult = serde_json::from_value(outcome_result(resp.outcome)?)?;
         self.tools = list.tools.clone();
         Ok(list.tools)
     }
@@ -99,14 +97,15 @@ impl<T: Transport> Session<T> {
             arguments,
         };
         let req = JsonRpcRequest::new(
-            next_id(),
+            self.next_id(),
             methods::TOOLS_CALL,
             Some(serde_json::to_value(params)?),
         );
 
         let resp = self.transport.send(req).await?;
-        let result_value = resp.outcome.into_result()?;
-        Ok(serde_json::from_value::<CallToolResult>(result_value)?)
+        Ok(serde_json::from_value::<CallToolResult>(outcome_result(
+            resp.outcome,
+        )?)?)
     }
 
     pub fn state(&self) -> &SessionState {
@@ -127,18 +126,10 @@ impl<T: Transport> Session<T> {
     }
 }
 
-// Extension trait to cleanly extract the result value from a response outcome.
-trait IntoResult {
-    fn into_result(self) -> Result<serde_json::Value>;
-}
-
-impl IntoResult for crate::protocol::mcp::ResponseOutcome {
-    fn into_result(self) -> Result<serde_json::Value> {
-        use crate::protocol::mcp::ResponseOutcome;
-        match self {
-            ResponseOutcome::Result(v) => Ok(v),
-            ResponseOutcome::Error(e) => Err(anyhow!("server error {}: {}", e.code, e.message)),
-        }
+fn outcome_result(outcome: ResponseOutcome) -> Result<serde_json::Value> {
+    match outcome {
+        ResponseOutcome::Result(v) => Ok(v),
+        ResponseOutcome::Error(e) => Err(anyhow!("server error {}: {}", e.code, e.message)),
     }
 }
 
@@ -146,35 +137,8 @@ impl IntoResult for crate::protocol::mcp::ResponseOutcome {
 mod tests {
     use super::*;
     use crate::protocol::mcp::{JsonRpcResponse, ResponseOutcome, ToolContent};
-    use async_trait::async_trait;
+    use crate::testutil::MockTransport;
     use serde_json::json;
-    use std::collections::VecDeque;
-
-    /// Fake transport that returns pre-programmed responses.
-    struct MockTransport {
-        responses: VecDeque<JsonRpcResponse>,
-    }
-
-    impl MockTransport {
-        fn with_responses(responses: Vec<JsonRpcResponse>) -> Self {
-            Self {
-                responses: responses.into(),
-            }
-        }
-    }
-
-    #[async_trait]
-    impl Transport for MockTransport {
-        async fn send(&mut self, _req: JsonRpcRequest) -> Result<JsonRpcResponse> {
-            self.responses
-                .pop_front()
-                .ok_or_else(|| anyhow!("mock: no more responses"))
-        }
-
-        async fn close(&mut self) -> Result<()> {
-            Ok(())
-        }
-    }
 
     fn init_response() -> JsonRpcResponse {
         JsonRpcResponse {
@@ -198,30 +162,20 @@ mod tests {
 
     #[tokio::test]
     async fn session_starts_unconnected() {
-        let transport = MockTransport::with_responses(vec![]);
-        let session = Session::new(transport);
+        let session = Session::new(MockTransport::new(vec![]));
         assert_eq!(*session.state(), SessionState::Unconnected);
     }
 
     #[tokio::test]
     async fn initialize_transitions_to_ready() {
-        // init response + notification "response" (ignored)
-        let transport = MockTransport::with_responses(vec![
-            init_response(),
-            // Notification gets sent but mock returns an error for no-response — that's fine
-        ]);
-        let mut session = Session::new(transport);
-        // initialize internally ignores the notification non-response
-        let _ = session.initialize().await; // may partially succeed
-                                            // state should be Ready OR still Initializing if notification send failed
-                                            // In TDD: what matters is the state machine logic, covered below
+        let mut session = Session::new(MockTransport::new(vec![init_response()]));
+        session.initialize().await.unwrap();
+        assert_eq!(*session.state(), SessionState::Ready);
     }
 
     #[tokio::test]
     async fn initialize_twice_errors() {
-        let transport = MockTransport::with_responses(vec![init_response()]);
-        let mut session = Session::new(transport);
-        // Force state to Ready manually
+        let mut session = Session::new(MockTransport::new(vec![]));
         session.state = SessionState::Ready;
         let err = session.initialize().await.unwrap_err();
         assert!(err.to_string().contains("already initialized"));
@@ -229,18 +183,16 @@ mod tests {
 
     #[tokio::test]
     async fn list_tools_before_ready_errors() {
-        let transport = MockTransport::with_responses(vec![]);
-        let mut session = Session::new(transport);
+        let mut session = Session::new(MockTransport::new(vec![]));
         let err = session.list_tools().await.unwrap_err();
         assert!(err.to_string().contains("not ready"));
     }
 
     #[tokio::test]
     async fn list_tools_returns_definitions() {
-        let transport = MockTransport::with_responses(vec![tools_response(json!([
+        let mut session = Session::new(MockTransport::new(vec![tools_response(json!([
             {"name": "read_file", "description": "reads a file", "inputSchema": {"type": "object"}}
-        ]))]);
-        let mut session = Session::new(transport);
+        ]))]));
         session.state = SessionState::Ready;
 
         let tools = session.list_tools().await.unwrap();
@@ -251,8 +203,7 @@ mod tests {
 
     #[tokio::test]
     async fn call_tool_before_ready_errors() {
-        let transport = MockTransport::with_responses(vec![]);
-        let mut session = Session::new(transport);
+        let mut session = Session::new(MockTransport::new(vec![]));
         let err = session.call_tool("foo", None).await.unwrap_err();
         assert!(err.to_string().contains("not ready"));
     }
@@ -267,8 +218,7 @@ mod tests {
                 "isError": false
             })),
         };
-        let transport = MockTransport::with_responses(vec![tool_resp]);
-        let mut session = Session::new(transport);
+        let mut session = Session::new(MockTransport::new(vec![tool_resp]));
         session.state = SessionState::Ready;
 
         let result = session
@@ -294,8 +244,7 @@ mod tests {
                 data: None,
             }),
         };
-        let transport = MockTransport::with_responses(vec![err_resp]);
-        let mut session = Session::new(transport);
+        let mut session = Session::new(MockTransport::new(vec![err_resp]));
         session.state = SessionState::Ready;
 
         let err = session.call_tool("nonexistent", None).await.unwrap_err();
@@ -304,10 +253,25 @@ mod tests {
 
     #[tokio::test]
     async fn close_transitions_to_closed() {
-        let transport = MockTransport::with_responses(vec![]);
-        let mut session = Session::new(transport);
+        let mut session = Session::new(MockTransport::new(vec![]));
         session.state = SessionState::Ready;
         session.close().await.unwrap();
         assert_eq!(*session.state(), SessionState::Closed);
+    }
+
+    #[tokio::test]
+    async fn per_session_counter_starts_at_one() {
+        let session = Session::new(MockTransport::new(vec![]));
+        assert_eq!(session.next_id(), 1);
+        assert_eq!(session.next_id(), 2);
+    }
+
+    #[tokio::test]
+    async fn two_sessions_have_independent_counters() {
+        let s1 = Session::new(MockTransport::new(vec![]));
+        let s2 = Session::new(MockTransport::new(vec![]));
+        // Both start at 1 — independent, no shared state
+        assert_eq!(s1.next_id(), 1);
+        assert_eq!(s2.next_id(), 1);
     }
 }

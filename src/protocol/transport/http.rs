@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use futures_util::StreamExt;
 use reqwest::Client;
 use tokio::sync::{oneshot, Mutex};
 
@@ -14,43 +15,41 @@ use super::Transport;
 type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>;
 
 pub struct HttpTransport {
-    client: Client,
-    base_url: String,
+    client: Arc<Client>,
+    mcp_url: String,
     pending: PendingMap,
 }
 
 impl HttpTransport {
     /// Connect to a remote MCP server at `base_url`.
-    /// Spawns a background SSE listener that routes responses to pending callers.
+    /// Pre-computes endpoint URLs and spawns a background SSE listener.
     pub async fn connect(base_url: impl Into<String>) -> Result<Self> {
         let base_url = base_url.into();
-        let client = Client::builder()
-            .build()
-            .context("failed to build HTTP client")?;
-
-        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
-        let pending_sse = Arc::clone(&pending);
-        let sse_client = client.clone();
+        let mcp_url = format!("{base_url}/mcp");
         let sse_url = format!("{base_url}/sse");
+
+        let client = Arc::new(Client::builder().build().context("build HTTP client")?);
+        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
+
+        let sse_client = Arc::clone(&client);
+        let sse_pending = Arc::clone(&pending);
 
         tokio::spawn(async move {
             if let Ok(resp) = sse_client.get(&sse_url).send().await {
                 let mut stream = resp.bytes_stream();
-                use futures_util::StreamExt;
                 let mut buf = String::new();
                 while let Some(Ok(chunk)) = stream.next().await {
                     buf.push_str(&String::from_utf8_lossy(&chunk));
-                    // SSE events are separated by \n\n
                     while let Some(pos) = buf.find("\n\n") {
                         let event = buf[..pos].to_string();
                         buf = buf[pos + 2..].to_string();
-                        // Extract `data:` lines
                         for line in event.lines() {
                             if let Some(data) = line.strip_prefix("data:") {
-                                let data = data.trim();
-                                if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(data) {
-                                    let key = request_id_key(resp.id.as_ref());
-                                    let mut map = pending_sse.lock().await;
+                                if let Ok(resp) =
+                                    serde_json::from_str::<JsonRpcResponse>(data.trim())
+                                {
+                                    let key = id_key(resp.id.as_ref());
+                                    let mut map = sse_pending.lock().await;
                                     if let Some(tx) = map.remove(&key) {
                                         let _ = tx.send(resp);
                                     }
@@ -64,7 +63,7 @@ impl HttpTransport {
 
         Ok(Self {
             client,
-            base_url,
+            mcp_url,
             pending,
         })
     }
@@ -73,13 +72,12 @@ impl HttpTransport {
 #[async_trait::async_trait]
 impl Transport for HttpTransport {
     async fn send(&mut self, request: JsonRpcRequest) -> Result<JsonRpcResponse> {
-        let key = request_id_key(Some(&request.id));
+        let key = id_key(Some(&request.id));
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(key, tx);
 
-        let url = format!("{}/mcp", self.base_url);
         self.client
-            .post(&url)
+            .post(&self.mcp_url)
             .json(&request)
             .send()
             .await
@@ -89,12 +87,22 @@ impl Transport for HttpTransport {
             .map_err(|_| anyhow!("SSE stream closed before response arrived"))
     }
 
+    async fn notify(&mut self, notification: JsonRpcRequest) -> Result<()> {
+        self.client
+            .post(&self.mcp_url)
+            .json(&notification)
+            .send()
+            .await
+            .context("HTTP POST notification")?;
+        Ok(())
+    }
+
     async fn close(&mut self) -> Result<()> {
         Ok(())
     }
 }
 
-fn request_id_key(id: Option<&RequestId>) -> String {
+fn id_key(id: Option<&RequestId>) -> String {
     match id {
         Some(RequestId::Number(n)) => n.to_string(),
         Some(RequestId::String(s)) => s.clone(),
@@ -107,14 +115,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn request_id_key_variants() {
-        assert_eq!(request_id_key(Some(&RequestId::Number(1))), "1");
-        assert_eq!(request_id_key(Some(&RequestId::String("x".into()))), "x");
-        assert_eq!(request_id_key(None), "__notification__");
+    fn id_key_variants() {
+        assert_eq!(id_key(Some(&RequestId::Number(1))), "1");
+        assert_eq!(id_key(Some(&RequestId::String("x".into()))), "x");
+        assert_eq!(id_key(None), "__notification__");
     }
 
     #[test]
-    fn base_url_forms_mcp_endpoint() {
+    fn endpoints_derived_from_base_url() {
         let base = "http://localhost:8000";
         assert_eq!(format!("{base}/mcp"), "http://localhost:8000/mcp");
         assert_eq!(format!("{base}/sse"), "http://localhost:8000/sse");

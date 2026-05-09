@@ -18,7 +18,7 @@ type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>;
 pub struct StdioTransport {
     stdin: ChildStdin,
     pending: PendingMap,
-    _child: Child,
+    child: Child,
 }
 
 impl StdioTransport {
@@ -41,7 +41,6 @@ impl StdioTransport {
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
         let pending_reader = Arc::clone(&pending);
 
-        // Background task: read newline-delimited JSON responses from the child
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
@@ -51,7 +50,7 @@ impl StdioTransport {
                     continue;
                 }
                 if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(&line) {
-                    let key = request_id_key(resp.id.as_ref());
+                    let key = id_key(resp.id.as_ref());
                     let mut map = pending_reader.lock().await;
                     if let Some(tx) = map.remove(&key) {
                         let _ = tx.send(resp);
@@ -63,34 +62,39 @@ impl StdioTransport {
         Ok(Self {
             stdin,
             pending,
-            _child: child,
+            child,
         })
     }
 
-    async fn send_raw(
-        &mut self,
-        request: &JsonRpcRequest,
-    ) -> Result<oneshot::Receiver<JsonRpcResponse>> {
-        let key = request_id_key(Some(&request.id));
-        let (tx, rx) = oneshot::channel();
-        self.pending.lock().await.insert(key, tx);
-
-        let mut line = serde_json::to_string(request)?;
+    async fn write_line(&mut self, msg: &JsonRpcRequest) -> Result<()> {
+        let mut line = serde_json::to_string(msg)?;
         line.push('\n');
         self.stdin
             .write_all(line.as_bytes())
             .await
-            .context("write to child stdin")?;
-        Ok(rx)
+            .context("write to child stdin")
+    }
+}
+
+impl Drop for StdioTransport {
+    fn drop(&mut self) {
+        let _ = self.child.start_kill();
     }
 }
 
 #[async_trait::async_trait]
 impl Transport for StdioTransport {
     async fn send(&mut self, request: JsonRpcRequest) -> Result<JsonRpcResponse> {
-        let rx = self.send_raw(&request).await?;
+        let key = id_key(Some(&request.id));
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().await.insert(key, tx);
+        self.write_line(&request).await?;
         rx.await
             .map_err(|_| anyhow!("child process closed before responding"))
+    }
+
+    async fn notify(&mut self, notification: JsonRpcRequest) -> Result<()> {
+        self.write_line(&notification).await
     }
 
     async fn close(&mut self) -> Result<()> {
@@ -99,17 +103,12 @@ impl Transport for StdioTransport {
     }
 }
 
-fn request_id_key(id: Option<&RequestId>) -> String {
+fn id_key(id: Option<&RequestId>) -> String {
     match id {
         Some(RequestId::Number(n)) => n.to_string(),
         Some(RequestId::String(s)) => s.clone(),
         None => "__notification__".into(),
     }
-}
-
-// Helper: parse the first word of a command for test use
-pub fn parse_cmd(cmd: &str) -> Option<&str> {
-    cmd.split_whitespace().next()
 }
 
 #[cfg(test)]
@@ -118,38 +117,22 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn request_id_key_number() {
-        let id = RequestId::Number(42);
-        assert_eq!(request_id_key(Some(&id)), "42");
+    fn id_key_number() {
+        assert_eq!(id_key(Some(&RequestId::Number(42))), "42");
     }
 
     #[test]
-    fn request_id_key_string() {
-        let id = RequestId::String("abc".into());
-        assert_eq!(request_id_key(Some(&id)), "abc");
+    fn id_key_string() {
+        assert_eq!(id_key(Some(&RequestId::String("abc".into()))), "abc");
     }
 
     #[test]
-    fn request_id_key_none() {
-        assert_eq!(request_id_key(None), "__notification__");
+    fn id_key_none() {
+        assert_eq!(id_key(None), "__notification__");
     }
 
     #[test]
-    fn parse_cmd_extracts_program() {
-        assert_eq!(parse_cmd("node dist/server.js"), Some("node"));
-        assert_eq!(parse_cmd("  npx my-server  "), Some("npx"));
-        assert_eq!(parse_cmd(""), None);
-    }
-
-    /// Verify the stdio transport can roundtrip a message with a mock echo server.
-    /// Uses `cat` as a stand-in: it echoes stdin to stdout.
-    #[tokio::test]
-    async fn stdio_transport_sends_and_receives() {
-        // We can't test a real MCP server here, but we can verify
-        // the send → serialization path produces valid JSON on the wire
-        // by checking that a manually constructed response is received.
-        // Full roundtrip integration tests live in tests/integration/.
-
+    fn write_serializes_valid_json() {
         let req = JsonRpcRequest::new(1i64, "ping", None);
         let serialized = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&serialized).unwrap();

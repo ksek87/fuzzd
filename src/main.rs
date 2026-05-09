@@ -9,6 +9,8 @@ mod fuzzer;
 mod protocol;
 mod reporter;
 mod runner;
+#[cfg(test)]
+mod testutil;
 
 use cli::{Cli, Command, CorpusAction};
 
