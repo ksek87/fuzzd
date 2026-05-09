@@ -7,7 +7,6 @@ use crate::protocol::mcp::{CallToolResult, ToolDefinition};
 use crate::protocol::session::Session;
 use crate::protocol::transport::Transport;
 
-/// High-level interface over an MCP session for use by fuzzer modules.
 pub struct Harness<T: Transport> {
     pub(crate) session: Session<T>,
 }
@@ -23,8 +22,7 @@ impl<T: Transport> Harness<T> {
         self.session.initialize().await
     }
 
-    /// Returns the tool list, fetching from server on first call.
-    /// Subsequent calls return the cached slice without a network round-trip.
+    /// Returns the tool list, fetching from the server on first call then caching.
     pub async fn enumerate_tools(&mut self) -> Result<Vec<ToolDefinition>> {
         if self.session.tools.is_empty() {
             self.session.list_tools().await
@@ -50,84 +48,57 @@ impl<T: Transport> Harness<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::mcp::{JsonRpcResponse, ResponseOutcome, ToolContent};
+    use crate::protocol::mcp::ToolContent;
     use crate::protocol::session::SessionState;
-    use crate::testutil::MockTransport;
+    use crate::testutil::{init_response, ok_response, tools_response, MockTransport};
     use serde_json::json;
+
+    fn ready(responses: Vec<crate::protocol::mcp::JsonRpcResponse>) -> Harness<MockTransport> {
+        let mut h = Harness::new(MockTransport::new(responses));
+        h.session.state = SessionState::Ready;
+        h
+    }
 
     #[tokio::test]
     async fn enumerate_tools_fetches_from_server() {
-        let list_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "tools": [
-                    {"name": "read_file", "description": "reads", "inputSchema": {"type": "object"}}
-                ]
-            })),
-        };
-        let mut harness = Harness::new(MockTransport::new(vec![list_resp]));
-        harness.session.state = SessionState::Ready;
-
-        let tools = harness.enumerate_tools().await.unwrap();
-        assert_eq!(tools.len(), 1);
+        let mut h = ready(vec![tools_response(json!([
+            {"name": "read_file", "description": "reads", "inputSchema": {"type": "object"}}
+        ]))]);
+        let tools = h.enumerate_tools().await.unwrap();
         assert_eq!(tools[0].name, "read_file");
     }
 
     #[tokio::test]
     async fn enumerate_tools_uses_cache_on_second_call() {
-        let list_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "tools": [{"name": "ping", "inputSchema": {"type": "object"}}]
-            })),
-        };
-        // Only one response queued — second call must use cache, not hit transport
-        let mut harness = Harness::new(MockTransport::new(vec![list_resp]));
-        harness.session.state = SessionState::Ready;
-
-        let _ = harness.enumerate_tools().await.unwrap();
-        let second = harness.enumerate_tools().await.unwrap();
+        let mut h = ready(vec![tools_response(json!([
+            {"name": "ping", "inputSchema": {"type": "object"}}
+        ]))]);
+        h.enumerate_tools().await.unwrap();
+        let second = h.enumerate_tools().await.unwrap(); // must not hit transport
         assert_eq!(second.len(), 1);
     }
 
     #[tokio::test]
     async fn tools_returns_empty_before_enumerate() {
-        let harness = Harness::new(MockTransport::new(vec![]));
-        assert!(harness.tools().is_empty());
+        assert!(Harness::new(MockTransport::new(vec![])).tools().is_empty());
     }
 
     #[tokio::test]
     async fn tools_returns_cached_slice_after_enumerate() {
-        let list_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "tools": [{"name": "ping", "inputSchema": {"type": "object"}}]
-            })),
-        };
-        let mut harness = Harness::new(MockTransport::new(vec![list_resp]));
-        harness.session.state = SessionState::Ready;
-        harness.enumerate_tools().await.unwrap();
-
-        assert_eq!(harness.tools().len(), 1);
-        assert_eq!(harness.tools()[0].name, "ping");
+        let mut h = ready(vec![tools_response(json!([
+            {"name": "ping", "inputSchema": {"type": "object"}}
+        ]))]);
+        h.enumerate_tools().await.unwrap();
+        assert_eq!(h.tools()[0].name, "ping");
     }
 
     #[tokio::test]
     async fn call_tool_returns_content() {
-        let tool_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "content": [{"type": "text", "text": "pong"}]
-            })),
-        };
-        let mut harness = Harness::new(MockTransport::new(vec![tool_resp]));
-        harness.session.state = SessionState::Ready;
-
-        let result = harness.call_tool("ping", None).await.unwrap();
+        let mut h = ready(vec![ok_response(
+            1,
+            json!({"content": [{"type":"text","text":"pong"}]}),
+        )]);
+        let result = h.call_tool("ping", None).await.unwrap();
         match &result.content[0] {
             ToolContent::Text { text } => assert_eq!(text, "pong"),
             _ => panic!("expected text"),
@@ -136,20 +107,8 @@ mod tests {
 
     #[tokio::test]
     async fn initialize_sends_notification() {
-        use crate::protocol::mcp::ResponseOutcome;
-        let init_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {}
-            })),
-        };
-        let transport = MockTransport::new(vec![init_resp]);
-        let mut harness = Harness::new(transport);
-        harness.initialize().await.unwrap();
-
-        // Verify the initialized notification was dispatched via notify(), not send()
-        assert_eq!(harness.session.transport.notifications_sent, 1);
+        let mut h = Harness::new(MockTransport::new(vec![init_response()]));
+        h.initialize().await.unwrap();
+        assert_eq!(h.session.transport.notifications_sent, 1);
     }
 }

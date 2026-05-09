@@ -1,15 +1,14 @@
-//! Shared test utilities. Only compiled in `#[cfg(test)]`.
-
 use std::collections::VecDeque;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde_json::{json, Value};
 
-use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse, RequestId, ResponseOutcome};
 use crate::protocol::transport::Transport;
 
-/// A deterministic transport that returns pre-programmed responses in order.
-/// Notifications are accepted and discarded.
+/// Deterministic transport that returns pre-programmed responses in order.
+/// Notifications are accepted and counted.
 pub struct MockTransport {
     responses: VecDeque<JsonRpcResponse>,
     pub notifications_sent: usize,
@@ -40,4 +39,28 @@ impl Transport for MockTransport {
     async fn close(&mut self) -> Result<()> {
         Ok(())
     }
+}
+
+/// Build a successful JSON-RPC response wrapping `result`.
+pub fn ok_response(id: i64, result: Value) -> JsonRpcResponse {
+    JsonRpcResponse {
+        jsonrpc: "2.0".into(),
+        id: Some(RequestId::Number(id)),
+        outcome: ResponseOutcome::Result(result),
+    }
+}
+
+pub fn init_response() -> JsonRpcResponse {
+    ok_response(
+        1,
+        json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "serverInfo": {"name": "test-server", "version": "0.1"}
+        }),
+    )
+}
+
+pub fn tools_response(tools: Value) -> JsonRpcResponse {
+    ok_response(1, json!({ "tools": tools }))
 }

@@ -1,19 +1,15 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 
-use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse, RequestId};
-
-use super::Transport;
-
-type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<JsonRpcResponse>>>>;
+use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::transport::{id_key, PendingMap, Transport};
 
 pub struct StdioTransport {
     stdin: ChildStdin,
@@ -22,7 +18,6 @@ pub struct StdioTransport {
 }
 
 impl StdioTransport {
-    /// Spawn `cmd` as a child process and communicate over its stdin/stdout.
     pub async fn spawn(cmd: &str) -> Result<Self> {
         let mut args = cmd.split_whitespace();
         let program = args.next().ok_or_else(|| anyhow!("empty command"))?;
@@ -38,12 +33,11 @@ impl StdioTransport {
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");
 
-        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
+        let pending: PendingMap = Arc::new(Mutex::new(Default::default()));
         let pending_reader = Arc::clone(&pending);
 
         tokio::spawn(async move {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
+            let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let line = line.trim().to_string();
                 if line.is_empty() {
@@ -51,8 +45,7 @@ impl StdioTransport {
                 }
                 if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(&line) {
                     let key = id_key(resp.id.as_ref());
-                    let mut map = pending_reader.lock().await;
-                    if let Some(tx) = map.remove(&key) {
+                    if let Some(tx) = pending_reader.lock().await.remove(&key) {
                         let _ = tx.send(resp);
                     }
                 }
@@ -86,7 +79,7 @@ impl Drop for StdioTransport {
 impl Transport for StdioTransport {
     async fn send(&mut self, request: JsonRpcRequest) -> Result<JsonRpcResponse> {
         let key = id_key(Some(&request.id));
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = tokio::sync::oneshot::channel();
         self.pending.lock().await.insert(key, tx);
         self.write_line(&request).await?;
         rx.await
@@ -103,33 +96,10 @@ impl Transport for StdioTransport {
     }
 }
 
-fn id_key(id: Option<&RequestId>) -> String {
-    match id {
-        Some(RequestId::Number(n)) => n.to_string(),
-        Some(RequestId::String(s)) => s.clone(),
-        None => "__notification__".into(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::Value;
-
-    #[test]
-    fn id_key_number() {
-        assert_eq!(id_key(Some(&RequestId::Number(42))), "42");
-    }
-
-    #[test]
-    fn id_key_string() {
-        assert_eq!(id_key(Some(&RequestId::String("abc".into()))), "abc");
-    }
-
-    #[test]
-    fn id_key_none() {
-        assert_eq!(id_key(None), "__notification__");
-    }
 
     #[test]
     fn write_serializes_valid_json() {

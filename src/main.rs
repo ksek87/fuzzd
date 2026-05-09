@@ -11,6 +11,7 @@ mod reporter;
 mod runner;
 #[cfg(test)]
 mod testutil;
+mod utils;
 
 use cli::{Cli, Command, CorpusAction};
 

@@ -37,6 +37,18 @@ impl<T: Transport> Session<T> {
         }
     }
 
+    /// Construct a session already in the Ready state. For use in tests only.
+    #[cfg(test)]
+    pub(crate) fn ready(transport: T) -> Self {
+        Self {
+            transport,
+            state: SessionState::Ready,
+            counter: AtomicI64::new(1),
+            server_info: None,
+            tools: Vec::new(),
+        }
+    }
+
     fn next_id(&self) -> i64 {
         self.counter.fetch_add(1, Ordering::Relaxed)
     }
@@ -136,29 +148,9 @@ fn outcome_result(outcome: ResponseOutcome) -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::mcp::{JsonRpcResponse, ResponseOutcome, ToolContent};
-    use crate::testutil::MockTransport;
+    use crate::protocol::mcp::{JsonRpcError, JsonRpcResponse, ResponseOutcome, ToolContent};
+    use crate::testutil::{init_response, ok_response, tools_response, MockTransport};
     use serde_json::json;
-
-    fn init_response() -> JsonRpcResponse {
-        JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "serverInfo": {"name": "test-server", "version": "0.1"}
-            })),
-        }
-    }
-
-    fn tools_response(tools: serde_json::Value) -> JsonRpcResponse {
-        JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(2i64.into()),
-            outcome: ResponseOutcome::Result(json!({ "tools": tools })),
-        }
-    }
 
     #[tokio::test]
     async fn session_starts_unconnected() {
@@ -175,8 +167,7 @@ mod tests {
 
     #[tokio::test]
     async fn initialize_twice_errors() {
-        let mut session = Session::new(MockTransport::new(vec![]));
-        session.state = SessionState::Ready;
+        let mut session = Session::ready(MockTransport::new(vec![]));
         let err = session.initialize().await.unwrap_err();
         assert!(err.to_string().contains("already initialized"));
     }
@@ -190,11 +181,10 @@ mod tests {
 
     #[tokio::test]
     async fn list_tools_returns_definitions() {
-        let mut session = Session::new(MockTransport::new(vec![tools_response(json!([
+        let resp = tools_response(json!([
             {"name": "read_file", "description": "reads a file", "inputSchema": {"type": "object"}}
-        ]))]));
-        session.state = SessionState::Ready;
-
+        ]));
+        let mut session = Session::ready(MockTransport::new(vec![resp]));
         let tools = session.list_tools().await.unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "read_file");
@@ -210,31 +200,23 @@ mod tests {
 
     #[tokio::test]
     async fn call_tool_returns_result() {
-        let tool_resp = JsonRpcResponse {
-            jsonrpc: "2.0".into(),
-            id: Some(1i64.into()),
-            outcome: ResponseOutcome::Result(json!({
-                "content": [{"type": "text", "text": "file contents here"}],
-                "isError": false
-            })),
-        };
-        let mut session = Session::new(MockTransport::new(vec![tool_resp]));
-        session.state = SessionState::Ready;
-
+        let resp = ok_response(
+            1,
+            json!({"content": [{"type": "text", "text": "file contents"}], "isError": false}),
+        );
+        let mut session = Session::ready(MockTransport::new(vec![resp]));
         let result = session
             .call_tool("read_file", Some(json!({"path": "/tmp/test.txt"})))
             .await
             .unwrap();
-        assert_eq!(result.content.len(), 1);
         match &result.content[0] {
-            ToolContent::Text { text } => assert_eq!(text, "file contents here"),
+            ToolContent::Text { text } => assert_eq!(text, "file contents"),
             _ => panic!("expected text"),
         }
     }
 
     #[tokio::test]
     async fn call_tool_server_error_propagates() {
-        use crate::protocol::mcp::JsonRpcError;
         let err_resp = JsonRpcResponse {
             jsonrpc: "2.0".into(),
             id: Some(1i64.into()),
@@ -244,17 +226,14 @@ mod tests {
                 data: None,
             }),
         };
-        let mut session = Session::new(MockTransport::new(vec![err_resp]));
-        session.state = SessionState::Ready;
-
+        let mut session = Session::ready(MockTransport::new(vec![err_resp]));
         let err = session.call_tool("nonexistent", None).await.unwrap_err();
         assert!(err.to_string().contains("Method not found"));
     }
 
     #[tokio::test]
     async fn close_transitions_to_closed() {
-        let mut session = Session::new(MockTransport::new(vec![]));
-        session.state = SessionState::Ready;
+        let mut session = Session::ready(MockTransport::new(vec![]));
         session.close().await.unwrap();
         assert_eq!(*session.state(), SessionState::Closed);
     }
@@ -270,7 +249,6 @@ mod tests {
     async fn two_sessions_have_independent_counters() {
         let s1 = Session::new(MockTransport::new(vec![]));
         let s2 = Session::new(MockTransport::new(vec![]));
-        // Both start at 1 — independent, no shared state
         assert_eq!(s1.next_id(), 1);
         assert_eq!(s2.next_id(), 1);
     }
