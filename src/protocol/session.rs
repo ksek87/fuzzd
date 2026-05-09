@@ -92,8 +92,8 @@ impl<T: Transport> Session<T> {
         let req = JsonRpcRequest::new(self.next_id(), methods::TOOLS_LIST, None);
         let resp = self.transport.send(req).await?;
         let list: ListToolsResult = serde_json::from_value(outcome_result(resp.outcome)?)?;
-        self.tools = list.tools.clone();
-        Ok(list.tools)
+        self.tools = list.tools;
+        Ok(self.tools.clone())
     }
 
     /// Call a tool by name with the given arguments.

@@ -15,6 +15,7 @@ pub struct StdioTransport {
     stdin: ChildStdin,
     pending: PendingMap,
     child: Child,
+    reader_task: tokio::task::JoinHandle<()>,
 }
 
 impl StdioTransport {
@@ -36,7 +37,7 @@ impl StdioTransport {
         let pending: PendingMap = Arc::new(Mutex::new(Default::default()));
         let pending_reader = Arc::clone(&pending);
 
-        tokio::spawn(async move {
+        let reader_task = tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let line = line.trim().to_string();
@@ -56,6 +57,7 @@ impl StdioTransport {
             stdin,
             pending,
             child,
+            reader_task,
         })
     }
 
@@ -71,6 +73,7 @@ impl StdioTransport {
 
 impl Drop for StdioTransport {
     fn drop(&mut self) {
+        self.reader_task.abort();
         let _ = self.child.start_kill();
     }
 }
@@ -92,6 +95,7 @@ impl Transport for StdioTransport {
 
     async fn close(&mut self) -> Result<()> {
         self.stdin.shutdown().await.ok();
+        self.pending.lock().await.clear();
         Ok(())
     }
 }

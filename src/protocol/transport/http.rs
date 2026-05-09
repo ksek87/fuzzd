@@ -14,6 +14,7 @@ pub struct HttpTransport {
     client: Arc<Client>,
     mcp_url: String,
     pending: PendingMap,
+    sse_task: tokio::task::JoinHandle<()>,
 }
 
 impl HttpTransport {
@@ -28,12 +29,15 @@ impl HttpTransport {
         let sse_client = Arc::clone(&client);
         let sse_pending = Arc::clone(&pending);
 
-        tokio::spawn(async move {
+        let sse_task = tokio::spawn(async move {
             if let Ok(resp) = sse_client.get(&sse_url).send().await {
                 let mut stream = resp.bytes_stream();
                 let mut buf = String::new();
                 while let Some(Ok(chunk)) = stream.next().await {
-                    buf.push_str(&String::from_utf8_lossy(&chunk));
+                    match std::str::from_utf8(&chunk) {
+                        Ok(s) => buf.push_str(s),
+                        Err(_) => continue,
+                    }
                     // Collect all parsed responses synchronously, then acquire the
                     // lock once per chunk rather than once per response.
                     let mut ready: Vec<(String, JsonRpcResponse)> = Vec::new();
@@ -62,7 +66,14 @@ impl HttpTransport {
             client,
             mcp_url,
             pending,
+            sse_task,
         })
+    }
+}
+
+impl Drop for HttpTransport {
+    fn drop(&mut self) {
+        self.sse_task.abort();
     }
 }
 
@@ -95,6 +106,8 @@ impl Transport for HttpTransport {
     }
 
     async fn close(&mut self) -> Result<()> {
+        self.sse_task.abort();
+        self.pending.lock().await.clear();
         Ok(())
     }
 }
