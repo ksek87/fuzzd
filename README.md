@@ -207,6 +207,18 @@ fuzzd/
 
 ---
 
+## Scope
+
+**v1.x: MCP protocol only.** fuzzd targets MCP servers exclusively — JSON-RPC 2.0 over stdio and HTTP+SSE, the full MCP tool lifecycle.
+
+**v2.x: OpenAPI / generic JSON Schema tool specs.** The argument fuzzer and description scanner are protocol-agnostic at their core. Once the MCP layer is solid, fuzzd will add an `--input-format openapi` mode to audit raw OpenAPI specs and any system that exposes tools as JSON Schema — no MCP required.
+
+The corpus format and `AttackRecord` schema are designed to span both: tool poisoning patterns, argument boundary mutations, and capability escapes apply equally to any agent tool surface.
+
+The corpus lives in this repository. Records grow as PRs from the community — the same model as Nuclei templates.
+
+---
+
 ## Build Order (MVP Roadmap)
 
 Something demonstrable at each stage:
