@@ -62,6 +62,13 @@ async fn main() -> Result<()> {
                     }
                     println!();
                 }
+
+                let has_blocking = findings
+                    .iter()
+                    .any(|f| f.severity >= corpus::Severity::High);
+                if has_blocking {
+                    std::process::exit(1);
+                }
             }
         }
         Command::Corpus(args) => {
