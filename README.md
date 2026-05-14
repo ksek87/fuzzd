@@ -291,7 +291,7 @@ First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Action
 `fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption use case for teams pulling from MCP marketplaces (Smithery, mcp.so).
 
 **v0.12 — Python SDK + framework adapters**
-`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Most agent teams define tools as decorated Python functions — this meets them there without requiring a schema export step.
+`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core is compiled as a native Python extension module — no Python reimplementation, full Rust performance. The Python layer is a thin adapter (~50 lines) that converts framework-native tool objects to JSON schema before calling into Rust. maturin builds platform wheels (Linux x86_64, macOS arm64, Windows) for PyPI distribution, fed from the same CI pipeline that produces the binary release.
 
 **v0.13 — npx wrapper**
 `npx fuzzd scan --schema tools.json` with no binary install. Removes the "compile Rust first" barrier for JavaScript/TypeScript teams. Thin wrapper that downloads the appropriate pre-built binary for the current platform.
