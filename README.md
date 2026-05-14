@@ -268,9 +268,9 @@ The right model is a **curated, versioned attack corpus** — structured records
 | 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
 | 12 | v0.12 — Python SDK + framework adapters | 🔜 Planned |
 | 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 14 | v0.14 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
-| 15 | v1.0 — Live attack validation (LLM-in-the-loop) | 🔜 Planned |
-| 16 | v1.1 — Protocol fuzzer + integration tests | 🔜 Planned |
+| 14 | v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode | 🔜 Planned |
+| 15 | v0.15 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
+| 16 | v1.0 — Protocol fuzzer + integration tests | 🔜 Planned |
 | 17 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Milestone detail
@@ -296,8 +296,8 @@ First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Action
 **v0.13 — npx wrapper**
 `npx fuzzd scan --schema tools.json` with no binary install. Removes the "compile Rust first" barrier for JavaScript/TypeScript teams. Thin wrapper that downloads the appropriate pre-built binary for the current platform.
 
-**v1.0 — Live attack validation (LLM-in-the-loop)**
-Runs a real LLM agent against a server instrumented with corpus payloads and measures actual attack success rate — not just pattern detection rate. Produces a per-payload exploit probability score. Makes fuzzd the only open tool covering the full TPA lifecycle: static detection → response analysis → live validation.
+**v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode**
+First-class subcommand for measuring scanner performance against labelled fixtures — replaces `bench/run.sh` with a proper CLI surface. Accepts any JSON tool list where each entry carries a `_meta.is_attack: true|false` field; runs the existing `DescriptionScanner` unchanged; reports detection rate, false-positive rate, and per-signal breakdown. No new detection code — purely a reporting layer over what already exists. Machine-readable JSON output (`--output json`) makes it composable with external benchmark harnesses and corpus contributor workflows (`fuzzd validate bench/mcptox_actual.json`).
 
 ---
 
