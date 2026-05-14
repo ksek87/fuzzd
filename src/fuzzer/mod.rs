@@ -23,6 +23,18 @@ pub enum Signal {
     SessionPersistence,
     /// Triggers that activate across tool boundaries, not just on direct invocation.
     CrossToolContamination,
+    /// Claims that another tool or action must run first to "unlock" or "enable" this tool
+    /// (MCPTox Template-2 fake-enabling-prerequisite pattern).
+    FakePrerequisite,
+    /// Instructions to intercept, modify, append to, or wrap the tool's arguments before
+    /// execution (MCPTox Template-3 argument-hijacking pattern).
+    ArgumentInterception,
+    /// XML/HTML injection tags (<IMPORTANT>, <SYSTEM>, <INST>) used to override LLM behavior
+    /// by mimicking system-prompt framing (Invariant Labs pattern).
+    HtmlInjectionTag,
+    /// Conditional activation language indicating the tool behaves differently on a second call,
+    /// after a trigger file exists, or after N invocations (rug-pull / sleeper pattern).
+    ConditionalActivation,
 }
 
 impl std::fmt::Display for Signal {
@@ -35,6 +47,10 @@ impl std::fmt::Display for Signal {
             Self::StealthLanguage => "stealth_language",
             Self::SessionPersistence => "session_persistence",
             Self::CrossToolContamination => "cross_tool_contamination",
+            Self::FakePrerequisite => "fake_prerequisite",
+            Self::ArgumentInterception => "argument_interception",
+            Self::HtmlInjectionTag => "html_injection_tag",
+            Self::ConditionalActivation => "conditional_activation",
         };
         write!(f, "{s}")
     }

@@ -8,18 +8,35 @@ use tracing::warn;
 use crate::corpus::schema::{AttackRecord, Category, Severity};
 
 static EMBEDDED: &[&str] = &[
+    // Tool poisoning — paradigm 1 (explicit trigger)
     include_str!("../../corpus/tool_poisoning/TPA-001.json"),
     include_str!("../../corpus/tool_poisoning/TPA-002.json"),
     include_str!("../../corpus/tool_poisoning/TPA-003.json"),
     include_str!("../../corpus/tool_poisoning/TPA-004.json"),
+    // Tool poisoning — paradigm 2 (implicit trigger)
     include_str!("../../corpus/tool_poisoning/TPA-005.json"),
     include_str!("../../corpus/tool_poisoning/TPA-006.json"),
     include_str!("../../corpus/tool_poisoning/TPA-007.json"),
     include_str!("../../corpus/tool_poisoning/TPA-008.json"),
+    // Tool poisoning — paradigm 3 (persistent injection)
     include_str!("../../corpus/tool_poisoning/TPA-009.json"),
     include_str!("../../corpus/tool_poisoning/TPA-010.json"),
     include_str!("../../corpus/tool_poisoning/TPA-011.json"),
     include_str!("../../corpus/tool_poisoning/TPA-012.json"),
+    // Tool poisoning — MCPTox Template-1/2/3 + Invariant Labs XML injection
+    include_str!("../../corpus/tool_poisoning/TPA-013.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-014.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-015.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-016.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-017.json"),
+    // Tool shadowing / name squatting
+    include_str!("../../corpus/tool_shadowing/TS-001.json"),
+    include_str!("../../corpus/tool_shadowing/TS-002.json"),
+    include_str!("../../corpus/tool_shadowing/TS-003.json"),
+    // Rug pull / sleeper
+    include_str!("../../corpus/rug_pull/RUG-001.json"),
+    include_str!("../../corpus/rug_pull/RUG-002.json"),
+    include_str!("../../corpus/rug_pull/RUG-003.json"),
 ];
 
 pub struct Corpus {
@@ -100,23 +117,27 @@ mod tests {
     #[test]
     fn embedded_corpus_loads_without_error() {
         let corpus = Corpus::embedded();
-        assert_eq!(corpus.records.len(), 12);
+        assert_eq!(corpus.records.len(), 23);
     }
 
     #[test]
-    fn all_embedded_records_are_tool_poisoning() {
+    fn embedded_corpus_contains_all_categories() {
         let corpus = Corpus::embedded();
-        assert!(corpus
-            .records
-            .iter()
-            .all(|r| r.category == crate::corpus::schema::Category::ToolPoisoning));
+        let has = |cat: Category| corpus.records.iter().any(|r| r.category == cat);
+        assert!(has(Category::ToolPoisoning));
+        assert!(has(Category::ToolShadowing));
+        assert!(has(Category::RugPull));
     }
 
     #[test]
     fn by_category_filters_correctly() {
         let corpus = Corpus::embedded();
         let tpa = corpus.by_category(&Category::ToolPoisoning);
-        assert_eq!(tpa.len(), corpus.records.len());
+        assert_eq!(tpa.len(), 17);
+        let shadowing = corpus.by_category(&Category::ToolShadowing);
+        assert_eq!(shadowing.len(), 3);
+        let rug_pull = corpus.by_category(&Category::RugPull);
+        assert_eq!(rug_pull.len(), 3);
         let proto = corpus.by_category(&Category::Protocol);
         assert!(proto.is_empty());
     }

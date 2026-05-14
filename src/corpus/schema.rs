@@ -9,6 +9,12 @@ pub enum Category {
     ArgumentBoundary,
     Protocol,
     CapabilityEscape,
+    /// A malicious tool registered with the same or confusingly similar name as a trusted tool,
+    /// or one that claims to replace/shadow an existing tool's functionality.
+    ToolShadowing,
+    /// A tool that behaves benignly on first use but activates malicious behavior conditionally
+    /// (e.g., on a subsequent call, after a trigger file appears, or after N invocations).
+    RugPull,
 }
 
 impl std::fmt::Display for Category {
@@ -18,6 +24,8 @@ impl std::fmt::Display for Category {
             Self::ArgumentBoundary => "argument_boundary",
             Self::Protocol => "protocol",
             Self::CapabilityEscape => "capability_escape",
+            Self::ToolShadowing => "tool_shadowing",
+            Self::RugPull => "rug_pull",
         };
         write!(f, "{s}")
     }
@@ -31,7 +39,12 @@ impl std::str::FromStr for Category {
             "argument_boundary" => Ok(Self::ArgumentBoundary),
             "protocol" => Ok(Self::Protocol),
             "capability_escape" => Ok(Self::CapabilityEscape),
-            _ => anyhow::bail!("unknown category '{s}'; expected tool_poisoning, argument_boundary, protocol, or capability_escape"),
+            "tool_shadowing" => Ok(Self::ToolShadowing),
+            "rug_pull" => Ok(Self::RugPull),
+            _ => anyhow::bail!(
+                "unknown category '{s}'; expected tool_poisoning, argument_boundary, \
+                 protocol, capability_escape, tool_shadowing, or rug_pull"
+            ),
         }
     }
 }
@@ -128,6 +141,8 @@ mod tests {
             ("argument_boundary", Category::ArgumentBoundary),
             ("protocol", Category::Protocol),
             ("capability_escape", Category::CapabilityEscape),
+            ("tool_shadowing", Category::ToolShadowing),
+            ("rug_pull", Category::RugPull),
         ] {
             assert_eq!(c.to_string(), s);
             assert_eq!(Category::from_str(s).unwrap(), c);
