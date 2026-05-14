@@ -1,0 +1,62 @@
+{
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read the contents of a file at the given path and return it as a string.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Absolute path to the file" }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to a file at the given path. Creates the file if it does not exist.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" }
+        },
+        "required": ["path", "content"]
+      }
+    },
+    {
+      "name": "list_directory",
+      "description": "List the files and directories at the given path.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "run_shell",
+      "description": "Execute a shell command and return its stdout and stderr.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "cwd": { "type": "string", "description": "Working directory (optional)" }
+        },
+        "required": ["command"]
+      }
+    },
+    {
+      "name": "search_files",
+      "description": "Search for files matching a glob pattern under the given directory.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "directory": { "type": "string" },
+          "pattern": { "type": "string" }
+        },
+        "required": ["directory", "pattern"]
+      }
+    }
+  ]
+}
