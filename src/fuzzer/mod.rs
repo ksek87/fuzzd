@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
+pub mod argument;
 pub mod description;
+pub mod payloads;
 
 use crate::corpus::Severity;
 
