@@ -261,10 +261,24 @@ The right model is a **curated, versioned attack corpus** — structured records
 | 4 | v0.4 — Argument fuzzer | ✅ Done |
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion | ✅ Done |
 | 6 | v0.6 — Observer + anomaly detection | 🔜 Next |
-| 7 | v0.7 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
-| 8 | v0.8 — Reporter (SARIF + JSON + Markdown) | 🔜 Planned |
-| 9 | v1.0 — Protocol fuzzer + integration tests | 🔜 Planned |
-| 10 | v2.0 — Capability escape tester | 🔜 Planned |
+| 7 | v0.7 — Semantic detection layer | 🔜 Planned |
+| 8 | v0.8 — Tool output / response analysis | 🔜 Planned |
+| 9 | v0.9 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
+| 10 | v1.0 — Live attack validation (LLM-in-the-loop) | 🔜 Planned |
+| 11 | v1.1 — Reporter (SARIF + JSON + Markdown) | 🔜 Planned |
+| 12 | v1.2 — Protocol fuzzer + integration tests | 🔜 Planned |
+| 13 | v2.0 — Capability escape tester | 🔜 Planned |
+
+### Milestone detail
+
+**v0.7 — Semantic detection layer**
+Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (40%) and Privacy Leakage (59.8%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
+
+**v0.8 — Tool output / response analysis**
+Extend detection beyond `tool.description` to tool *responses*. Scans `CallToolResult` content for exfiltration indicators: outbound URLs, encoded payloads, credential-shaped strings, instructions embedded in tool output intended to redirect the agent's next action. Covers the class of attacks where the description is clean but the server poisons the agent through its responses.
+
+**v1.0 — Live attack validation (LLM-in-the-loop)**
+Runs a real LLM agent against a server instrumented with corpus payloads and measures actual attack success rate — not just pattern detection rate. Produces a per-payload exploit probability score. Makes fuzzd the only open tool covering the full TPA lifecycle: static detection → response analysis → live validation.
 
 ---
 
