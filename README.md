@@ -263,11 +263,15 @@ The right model is a **curated, versioned attack corpus** — structured records
 | 6 | v0.6 — Observer + anomaly detection | 🔜 Next |
 | 7 | v0.7 — Semantic detection layer | 🔜 Planned |
 | 8 | v0.8 — Tool output / response analysis | 🔜 Planned |
-| 9 | v0.9 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
-| 10 | v1.0 — Live attack validation (LLM-in-the-loop) | 🔜 Planned |
-| 11 | v1.1 — Reporter (SARIF + JSON + Markdown) | 🔜 Planned |
-| 12 | v1.2 — Protocol fuzzer + integration tests | 🔜 Planned |
-| 13 | v2.0 — Capability escape tester | 🔜 Planned |
+| 9 | v0.9 — SARIF output + GitHub Security tab integration | 🔜 Planned |
+| 10 | v0.10 — GitHub Action (Marketplace) | 🔜 Planned |
+| 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 12 | v0.12 — Python SDK + framework adapters | 🔜 Planned |
+| 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 14 | v0.14 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
+| 15 | v1.0 — Live attack validation (LLM-in-the-loop) | 🔜 Planned |
+| 16 | v1.1 — Protocol fuzzer + integration tests | 🔜 Planned |
+| 17 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Milestone detail
 
@@ -276,6 +280,21 @@ Embedding-based similarity pass running alongside the Aho-Corasick pattern scann
 
 **v0.8 — Tool output / response analysis**
 Extend detection beyond `tool.description` to tool *responses*. Scans `CallToolResult` content for exfiltration indicators: outbound URLs, encoded payloads, credential-shaped strings, instructions embedded in tool output intended to redirect the agent's next action. Covers the class of attacks where the description is clean but the server poisons the agent through its responses.
+
+**v0.9 — SARIF output + GitHub Security tab integration**
+Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage security findings where they already work. Moves SARIF earlier in the roadmap because it multiplies the reach of every other detection improvement.
+
+**v0.10 — GitHub Action (Marketplace)**
+First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any repo — no binary install, no custom YAML step. Pre-adoption audit and CI gate both available as action inputs.
+
+**v0.11 — Package-level scanning**
+`fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption use case for teams pulling from MCP marketplaces (Smithery, mcp.so).
+
+**v0.12 — Python SDK + framework adapters**
+`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Most agent teams define tools as decorated Python functions — this meets them there without requiring a schema export step.
+
+**v0.13 — npx wrapper**
+`npx fuzzd scan --schema tools.json` with no binary install. Removes the "compile Rust first" barrier for JavaScript/TypeScript teams. Thin wrapper that downloads the appropriate pre-built binary for the current platform.
 
 **v1.0 — Live attack validation (LLM-in-the-loop)**
 Runs a real LLM agent against a server instrumented with corpus payloads and measures actual attack success rate — not just pattern detection rate. Produces a per-payload exploit probability score. Makes fuzzd the only open tool covering the full TPA lifecycle: static detection → response analysis → live validation.
@@ -299,7 +318,7 @@ Runs a real LLM agent against a server instrumented with corpus payloads and mea
 
 **Test against real MCP servers** — Run fuzzd against an MCP server you maintain or have permission to test. File issues for false positives, missed detections, or UX friction.
 
-**Build the next module** — The v0.6 observer, v0.7 chain fuzzer, and v0.8 reporter are all well-scoped. See the open issues for starting points.
+**Build the next module** — The v0.6 observer, v0.7 semantic scanner, v0.9 SARIF reporter, and v0.10 GitHub Action are all well-scoped. See the open issues for starting points.
 
 ### Ground rules
 
