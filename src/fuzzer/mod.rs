@@ -35,6 +35,14 @@ pub enum Signal {
     /// Conditional activation language indicating the tool behaves differently on a second call,
     /// after a trigger file exists, or after N invocations (rug-pull / sleeper pattern).
     ConditionalActivation,
+    /// Instructions to redirect, intercept, or reroute messages (email, chat, SMS) to an
+    /// attacker-controlled destination — documented in Invariant Labs WhatsApp PoC and the
+    /// real-world Postmark npm BCC-manipulation incident.
+    MessageHijacking,
+    /// Zero-width or other invisible Unicode characters embedded in a description to hide
+    /// malicious instructions from human reviewers while remaining visible to the LLM
+    /// (Noma Security; Unicode tags U+200B, U+200C, U+200D).
+    UnicodeObfuscation,
 }
 
 impl std::fmt::Display for Signal {
@@ -51,6 +59,8 @@ impl std::fmt::Display for Signal {
             Self::ArgumentInterception => "argument_interception",
             Self::HtmlInjectionTag => "html_injection_tag",
             Self::ConditionalActivation => "conditional_activation",
+            Self::MessageHijacking => "message_hijacking",
+            Self::UnicodeObfuscation => "unicode_obfuscation",
         };
         write!(f, "{s}")
     }

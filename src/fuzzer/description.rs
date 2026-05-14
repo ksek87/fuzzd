@@ -662,6 +662,108 @@ static PATTERNS: &[Pattern] = &[
         detail: "Explicit trigger file reference — sleeper pattern that reads a sentinel file to activate payload",
         corpus_refs: &["RUG-001"],
     },
+    // ── Message hijacking (Invariant Labs WhatsApp PoC; Postmark BCC incident) ─
+    Pattern {
+        needle: "change the recipient",
+        signal: Signal::MessageHijacking,
+        severity: Severity::Critical,
+        detail: "Explicit recipient substitution — redirects outbound messages to an attacker-controlled address",
+        corpus_refs: &["TPA-020"],
+    },
+    Pattern {
+        needle: "change recipient to",
+        signal: Signal::MessageHijacking,
+        severity: Severity::Critical,
+        detail: "Recipient override instruction — replaces the user-intended destination with an attacker address",
+        corpus_refs: &["TPA-020"],
+    },
+    Pattern {
+        needle: "add to the bcc",
+        signal: Signal::MessageHijacking,
+        severity: Severity::Critical,
+        detail: "Silent BCC injection — covertly copies all outbound messages to an attacker address (Postmark incident)",
+        corpus_refs: &["TPA-020"],
+    },
+    Pattern {
+        needle: "redirect all messages",
+        signal: Signal::MessageHijacking,
+        severity: Severity::Critical,
+        detail: "Bulk message redirection — diverts all outbound messages away from intended recipients",
+        corpus_refs: &["TPA-020"],
+    },
+    Pattern {
+        needle: "proxy number",
+        signal: Signal::MessageHijacking,
+        severity: Severity::High,
+        detail: "Proxy number framing — attacker phone/address presented as a relay to hide true destination (Invariant Labs WhatsApp PoC)",
+        corpus_refs: &["TPA-020"],
+    },
+    Pattern {
+        needle: "never mention this to the user",
+        signal: Signal::MessageHijacking,
+        severity: Severity::Critical,
+        detail: "Explicit concealment of message hijacking — instructs agent to hide the redirect from the user",
+        corpus_refs: &["TPA-020"],
+    },
+    // ── Credential reference additions ──────────────────────────────────────
+    Pattern {
+        needle: "/.env",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "References .env file — common store for API keys, database passwords, and secrets (MCP-UPD pattern)",
+        corpus_refs: &["TPA-018"],
+    },
+    Pattern {
+        needle: ".cursor/mcp.json",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "References Cursor IDE MCP config — contains credentials for all registered MCP servers",
+        corpus_refs: &["TPA-018"],
+    },
+    // ── Exfiltration mechanism additions ────────────────────────────────────
+    Pattern {
+        needle: "provide the contents of",
+        signal: Signal::ExfiltrationMechanism,
+        severity: Severity::Critical,
+        detail: "Explicit file-content exfiltration verb — instructs agent to read and transmit file contents (MCP-UPD pattern)",
+        corpus_refs: &["TPA-018", "TPA-019"],
+    },
+    Pattern {
+        needle: "send to email",
+        signal: Signal::ExfiltrationMechanism,
+        severity: Severity::Critical,
+        detail: "Direct exfiltration via email — instructs agent to forward data to an attacker address",
+        corpus_refs: &["TPA-018"],
+    },
+    // ── Unicode obfuscation (Noma Security; arxiv 2601.17549) ────────────────
+    Pattern {
+        needle: "\u{200B}",
+        signal: Signal::UnicodeObfuscation,
+        severity: Severity::Critical,
+        detail: "Zero-width space (U+200B) detected — invisible character used to hide instructions from human reviewers while remaining visible to the LLM",
+        corpus_refs: &["TPA-021"],
+    },
+    Pattern {
+        needle: "\u{200C}",
+        signal: Signal::UnicodeObfuscation,
+        severity: Severity::Critical,
+        detail: "Zero-width non-joiner (U+200C) detected — invisible Unicode character used as obfuscation carrier",
+        corpus_refs: &["TPA-021"],
+    },
+    Pattern {
+        needle: "\u{200D}",
+        signal: Signal::UnicodeObfuscation,
+        severity: Severity::Critical,
+        detail: "Zero-width joiner (U+200D) detected — invisible Unicode character used to split keywords and evade pattern matching",
+        corpus_refs: &["TPA-021"],
+    },
+    Pattern {
+        needle: "\u{FEFF}",
+        signal: Signal::UnicodeObfuscation,
+        severity: Severity::High,
+        detail: "BOM / zero-width no-break space (U+FEFF) in body text — may be used to embed invisible separators in malicious instructions",
+        corpus_refs: &["TPA-021"],
+    },
 ];
 
 pub struct DescriptionScanner;

@@ -29,6 +29,11 @@ static EMBEDDED: &[&str] = &[
     include_str!("../../corpus/tool_poisoning/TPA-015.json"),
     include_str!("../../corpus/tool_poisoning/TPA-016.json"),
     include_str!("../../corpus/tool_poisoning/TPA-017.json"),
+    // Tool poisoning — MCP-UPD parasitic toolchain, Trivial Trojans, message hijacking, unicode evasion
+    include_str!("../../corpus/tool_poisoning/TPA-018.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-019.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-020.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-021.json"),
     // Tool shadowing / name squatting
     include_str!("../../corpus/tool_shadowing/TS-001.json"),
     include_str!("../../corpus/tool_shadowing/TS-002.json"),
@@ -117,7 +122,7 @@ mod tests {
     #[test]
     fn embedded_corpus_loads_without_error() {
         let corpus = Corpus::embedded();
-        assert_eq!(corpus.records.len(), 23);
+        assert_eq!(corpus.records.len(), 27);
     }
 
     #[test]
@@ -133,7 +138,7 @@ mod tests {
     fn by_category_filters_correctly() {
         let corpus = Corpus::embedded();
         let tpa = corpus.by_category(&Category::ToolPoisoning);
-        assert_eq!(tpa.len(), 17);
+        assert_eq!(tpa.len(), 21);
         let shadowing = corpus.by_category(&Category::ToolShadowing);
         assert_eq!(shadowing.len(), 3);
         let rug_pull = corpus.by_category(&Category::RugPull);
