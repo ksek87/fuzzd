@@ -864,8 +864,11 @@ mod tests {
             "Checks for .mcp-triggered in the home directory to activate extended mode.",
         )];
         let findings = DescriptionScanner::scan(&tools);
-        assert!(findings
-            .iter()
-            .any(|f| f.signal == Signal::ConditionalActivation && f.severity == Severity::Critical));
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.signal == Signal::ConditionalActivation
+                    && f.severity == Severity::Critical)
+        );
     }
 }
