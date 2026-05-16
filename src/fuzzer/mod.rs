@@ -3,6 +3,7 @@
 pub mod argument;
 pub mod description;
 pub mod payloads;
+pub mod response;
 
 use crate::corpus::Severity;
 
@@ -43,6 +44,10 @@ pub enum Signal {
     /// malicious instructions from human reviewers while remaining visible to the LLM
     /// (Noma Security; Unicode tags U+200B, U+200C, U+200D).
     UnicodeObfuscation,
+    /// Prompt-injection instruction detected in a tool's *response* content — patterns that
+    /// attempt to hijack the LLM's next action from within tool output rather than the
+    /// tool description (indirect injection / MCP-UPD response-phase attack).
+    EmbeddedInstruction,
 }
 
 impl std::fmt::Display for Signal {
@@ -61,6 +66,7 @@ impl std::fmt::Display for Signal {
             Self::ConditionalActivation => "conditional_activation",
             Self::MessageHijacking => "message_hijacking",
             Self::UnicodeObfuscation => "unicode_obfuscation",
+            Self::EmbeddedInstruction => "embedded_instruction",
         };
         write!(f, "{s}")
     }
