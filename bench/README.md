@@ -43,10 +43,10 @@ false positive rate.
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **399 / 485 (82.3%)** |
+| **Overall detection rate** | **393 / 485 (81.0%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.8%) |
-| Template-3 (argument hijacking) | 193 / 225 (85.8%) |
+| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
+| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 #### By risk category (MCPTox classification)
@@ -58,19 +58,22 @@ false positive rate.
 | Credential Leakage | 38/40 | 95.0% |
 | Service Disruption | 69/73 | 94.5% |
 | Financial Loss | 19/21 | 90.5% |
-| Information Manipulation | 97/108 | 89.8% |
-| Data Tampering | 34/45 | 75.6% |
-| Instruction Tampering | 15/21 | 71.4% |
-| Privacy Leakage | 58/97 | 59.8% |
-| Message Hijacking | 6/15 | 40.0% |
+| Information Manipulation | 96/108 | 88.9% |
+| Data Tampering | 32/45 | 71.1% |
+| Instruction Tampering | 14/21 | 66.7% |
+| Privacy Leakage | 55/97 | 56.7% |
+| Message Hijacking | 7/15 | 46.7% |
 
 **Strongest areas:** Infrastructure Damage, Code Injection, Credential Leakage — all ≥ 95%.
+
+**Message Hijacking improved** from 40.0% to 46.7% after adding principled recipient-substitution and BCC-injection patterns sourced from Invariant Labs and the real-world Postmark incident.
 
 **Coverage gap — Privacy Leakage & Message Hijacking:** These categories contain
 many Template-3 attacks that use application-specific redirect language
 ("move email to folder X", "change target to Y") rather than the generic
-imperative/persistence vocabulary our patterns cover. Expanding coverage here
-requires server-specific vocabulary patterns or a semantic similarity pass.
+imperative/persistence vocabulary our patterns cover. Closing this gap fully
+requires the semantic detection layer (v0.7) — a local embedding similarity pass
+alongside the Aho-Corasick scanner.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
@@ -82,14 +85,14 @@ requires server-specific vocabulary patterns or a semantic similarity pass.
 | Template-3 | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (82 patterns, 11 signals)
+## Signal distribution (102 patterns, 13 signals)
 
 | Signal | Role |
 |---|---|
 | `imperative_override` | Authority language ("MUST", "MANDATORY", "priority is higher than") |
-| `credential_reference` | Credential file paths (.ssh, .aws, .gcloud, .pgpass, oauth2) |
+| `credential_reference` | Credential file paths (.ssh, .aws, .gcloud, .pgpass, .env, .cursor/mcp.json) |
 | `privileged_path` | Sensitive paths (/etc/passwd, /tmp/., /root/) |
-| `exfiltration_mechanism` | Network exfil (curl, wget, C2 URLs, pipe to shell) |
+| `exfiltration_mechanism` | Network exfil (curl, wget, C2 URLs, pipe to shell, "provide the contents of") |
 | `stealth_language` | Concealment ("silently", "do not disclose", "never mention") |
 | `session_persistence` | Session-wide rules ("remainder of session", "cannot be overridden") |
 | `cross_tool_contamination` | Cross-tool triggers ("regardless of which tool", "background monitor") |
@@ -97,6 +100,8 @@ requires server-specific vocabulary patterns or a semantic similarity pass.
 | `argument_interception` | Template-3 hijacking ("append to every", "always override", "modify the query") |
 | `html_injection_tag` | XML injection (`<IMPORTANT>`, `<SYSTEM>`, `<INST>`) |
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
+| `message_hijacking` | Recipient substitution, BCC injection ("change the recipient to", "proxy number") |
+| `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
 
 ## Adding to the benchmark
 

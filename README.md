@@ -126,10 +126,10 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **399 / 485 (82.3%)** |
+| **Overall detection rate** | **393 / 485 (81.0%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.8%) |
-| Template-3 (argument hijacking) | 193 / 225 (85.8%) |
+| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
+| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 Best categories: Infrastructure Damage 97.6%, Code Injection 95.5%, Credential Leakage 95.0%.
