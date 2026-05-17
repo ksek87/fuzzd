@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -87,7 +85,7 @@ impl Corpus {
         Ok(Self { records })
     }
 
-    /// All records matching the given category.
+    #[allow(dead_code)]
     pub fn by_category(&self, category: &Category) -> Vec<&AttackRecord> {
         self.records
             .iter()
@@ -95,7 +93,7 @@ impl Corpus {
             .collect()
     }
 
-    /// All records at or above the given minimum severity.
+    #[allow(dead_code)]
     pub fn by_min_severity(&self, min: &Severity) -> Vec<&AttackRecord> {
         self.records.iter().filter(|r| &r.severity >= min).collect()
     }

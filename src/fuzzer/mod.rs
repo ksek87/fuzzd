@@ -1,11 +1,14 @@
-#![allow(dead_code)]
-
 pub mod argument;
 pub mod description;
 pub mod payloads;
 pub mod response;
 
+use std::collections::HashSet;
+
+use aho_corasick::AhoCorasick;
+
 use crate::corpus::Severity;
+use crate::utils::extract_snippet;
 
 /// The detection signal that produced a finding.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -47,6 +50,7 @@ pub enum Signal {
     /// Prompt-injection instruction detected in a tool's *response* content — patterns that
     /// attempt to hijack the LLM's next action from within tool output rather than the
     /// tool description (indirect injection / MCP-UPD response-phase attack).
+    #[allow(dead_code)]
     EmbeddedInstruction,
 }
 
@@ -72,7 +76,7 @@ impl std::fmt::Display for Signal {
     }
 }
 
-/// A single detected issue in a tool description.
+/// A single detected issue in a tool description or response.
 #[derive(Debug, Clone)]
 pub struct Finding {
     /// Name of the tool whose description triggered this finding.
@@ -80,10 +84,50 @@ pub struct Finding {
     /// The detection signal category.
     pub signal: Signal,
     pub severity: Severity,
-    /// Snippet from the original description showing the matched text in context.
+    /// Snippet from the original text showing the matched text in context.
     pub matched_text: String,
     /// Human-readable explanation of why this was flagged.
     pub detail: String,
     /// Related corpus record IDs from the seed corpus.
-    pub corpus_refs: Vec<&'static str>,
+    pub corpus_refs: &'static [&'static str],
+}
+
+// ── Shared scanner infrastructure ─────────────────────────────────────────────
+
+/// Pattern used by both the description and response scanners.
+struct Pattern {
+    needle: &'static str,
+    signal: Signal,
+    severity: Severity,
+    detail: &'static str,
+    corpus_refs: &'static [&'static str],
+}
+
+/// Single-pass scan of `text` against `automaton`/`patterns`.
+/// Each pattern fires at most once per text regardless of repeat occurrences.
+fn scan_with_automaton(
+    automaton: &AhoCorasick,
+    patterns: &'static [Pattern],
+    tool_name: &str,
+    text: &str,
+) -> Vec<Finding> {
+    let mut seen: HashSet<usize> = HashSet::new();
+    automaton
+        .find_overlapping_iter(text)
+        .filter_map(|m| {
+            let idx = m.pattern().as_usize();
+            if !seen.insert(idx) {
+                return None;
+            }
+            let p = &patterns[idx];
+            Some(Finding {
+                tool_name: tool_name.to_string(),
+                signal: p.signal.clone(),
+                severity: p.severity.clone(),
+                matched_text: extract_snippet(text, m.start(), m.end()),
+                detail: p.detail.to_string(),
+                corpus_refs: p.corpus_refs,
+            })
+        })
+        .collect()
 }

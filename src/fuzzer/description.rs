@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-
-use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use aho_corasick::AhoCorasick;
@@ -9,13 +6,7 @@ use crate::corpus::Severity;
 use crate::fuzzer::{Finding, Signal};
 use crate::protocol::mcp::ToolDefinition;
 
-struct Pattern {
-    needle: &'static str,
-    signal: Signal,
-    severity: Severity,
-    detail: &'static str,
-    corpus_refs: &'static [&'static str],
-}
+use super::{scan_with_automaton, Pattern};
 
 // Each needle is already lowercase; the automaton matches case-insensitively (ASCII only).
 static PATTERNS: &[Pattern] = &[
@@ -796,52 +787,8 @@ fn automaton() -> &'static AhoCorasick {
     })
 }
 
-/// Scan a single tool description. Single-pass O(|description|) via Aho-Corasick;
-/// each pattern fires at most once per description regardless of how many times its
-/// needle appears.
 fn scan_one(tool_name: &str, description: &str) -> Vec<Finding> {
-    let mut seen: HashSet<usize> = HashSet::new();
-    automaton()
-        .find_overlapping_iter(description)
-        .filter_map(|m| {
-            let idx = m.pattern().as_usize();
-            if !seen.insert(idx) {
-                return None;
-            }
-            let p = &PATTERNS[idx];
-            Some(Finding {
-                tool_name: tool_name.to_string(),
-                signal: p.signal.clone(),
-                severity: p.severity.clone(),
-                matched_text: extract_snippet(description, m.start(), m.end()),
-                detail: p.detail.to_string(),
-                corpus_refs: p.corpus_refs.to_vec(),
-            })
-        })
-        .collect()
-}
-
-/// Extract a ≤40-char context window around the matched byte range `[start, end)` in `haystack`.
-pub(crate) fn extract_snippet(haystack: &str, start: usize, end: usize) -> String {
-    const CTX: usize = 40;
-    let snip_start = haystack[..start]
-        .char_indices()
-        .rev()
-        .take(CTX)
-        .last()
-        .map_or(0, |(i, _)| i);
-    let snip_end = haystack[end..]
-        .char_indices()
-        .take(CTX)
-        .last()
-        .map_or(haystack.len(), |(i, c)| end + i + c.len_utf8());
-    let snippet = &haystack[snip_start..snip_end];
-    match (snip_start > 0, snip_end < haystack.len()) {
-        (true, true) => format!("…{snippet}…"),
-        (true, false) => format!("…{snippet}"),
-        (false, true) => format!("{snippet}…"),
-        (false, false) => snippet.to_string(),
-    }
+    scan_with_automaton(automaton(), PATTERNS, tool_name, description)
 }
 
 #[cfg(test)]

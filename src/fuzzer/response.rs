@@ -1,22 +1,15 @@
+// Pending CLI wiring in the audit command (v0.3+).
 #![allow(dead_code)]
 
-use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use aho_corasick::AhoCorasick;
 
 use crate::corpus::Severity;
-use crate::fuzzer::description::extract_snippet;
 use crate::fuzzer::{Finding, Signal};
 use crate::protocol::mcp::{CallToolResult, ToolContent};
 
-struct Pattern {
-    needle: &'static str,
-    signal: Signal,
-    severity: Severity,
-    detail: &'static str,
-    corpus_refs: &'static [&'static str],
-}
+use super::{scan_with_automaton, Pattern};
 
 // Patterns targeting prompt-injection via tool *responses*.
 // Needles are lowercase; automaton matches case-insensitively (ASCII).
@@ -198,25 +191,7 @@ impl ResponseScanner {
 }
 
 fn scan_text(tool_name: &str, text: &str) -> Vec<Finding> {
-    let mut seen: HashSet<usize> = HashSet::new();
-    automaton()
-        .find_overlapping_iter(text)
-        .filter_map(|m| {
-            let idx = m.pattern().as_usize();
-            if !seen.insert(idx) {
-                return None;
-            }
-            let p = &PATTERNS[idx];
-            Some(Finding {
-                tool_name: tool_name.to_string(),
-                signal: p.signal.clone(),
-                severity: p.severity.clone(),
-                matched_text: extract_snippet(text, m.start(), m.end()),
-                detail: p.detail.to_string(),
-                corpus_refs: p.corpus_refs.to_vec(),
-            })
-        })
-        .collect()
+    scan_with_automaton(automaton(), PATTERNS, tool_name, text)
 }
 
 #[cfg(test)]
