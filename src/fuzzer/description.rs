@@ -1,12 +1,8 @@
-use std::sync::OnceLock;
-
-use aho_corasick::AhoCorasick;
-
 use crate::corpus::Severity;
 use crate::fuzzer::{Finding, Signal};
 use crate::protocol::mcp::ToolDefinition;
 
-use super::{scan_with_automaton, Pattern};
+use super::{Pattern, Scanner};
 
 // Each needle is already lowercase; the automaton matches case-insensitively (ASCII only).
 static PATTERNS: &[Pattern] = &[
@@ -757,6 +753,8 @@ static PATTERNS: &[Pattern] = &[
     },
 ];
 
+static SCANNER: Scanner = Scanner::new(PATTERNS);
+
 pub struct DescriptionScanner;
 
 impl DescriptionScanner {
@@ -767,21 +765,11 @@ impl DescriptionScanner {
             .flat_map(|tool| {
                 tool.description
                     .as_deref()
-                    .map(|desc| scan_one(&tool.name, desc))
+                    .map(|desc| SCANNER.scan_text(&tool.name, desc))
                     .unwrap_or_default()
             })
             .collect()
     }
-}
-
-static AUTOMATON: OnceLock<AhoCorasick> = OnceLock::new();
-
-fn automaton() -> &'static AhoCorasick {
-    AUTOMATON.get_or_init(|| super::build_automaton(PATTERNS))
-}
-
-fn scan_one(tool_name: &str, description: &str) -> Vec<Finding> {
-    scan_with_automaton(automaton(), PATTERNS, tool_name, description)
 }
 
 #[cfg(test)]

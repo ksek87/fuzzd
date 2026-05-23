@@ -4,6 +4,7 @@ pub mod payloads;
 pub mod response;
 
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use aho_corasick::AhoCorasick;
 
@@ -103,12 +104,29 @@ pub(super) struct Pattern {
     corpus_refs: &'static [&'static str],
 }
 
-/// Build an Aho-Corasick automaton for `patterns` with ASCII case-insensitive matching.
-pub(super) fn build_automaton(patterns: &'static [Pattern]) -> AhoCorasick {
-    AhoCorasick::builder()
-        .ascii_case_insensitive(true)
-        .build(patterns.iter().map(|p| p.needle))
-        .expect("valid pattern needles")
+/// Lazy-initialised scanner: owns its pattern slice and the Aho-Corasick automaton.
+pub(super) struct Scanner {
+    patterns: &'static [Pattern],
+    automaton: OnceLock<AhoCorasick>,
+}
+
+impl Scanner {
+    pub(super) const fn new(patterns: &'static [Pattern]) -> Self {
+        Self {
+            patterns,
+            automaton: OnceLock::new(),
+        }
+    }
+
+    pub(super) fn scan_text(&self, tool_name: &str, text: &str) -> Vec<Finding> {
+        let automaton = self.automaton.get_or_init(|| {
+            AhoCorasick::builder()
+                .ascii_case_insensitive(true)
+                .build(self.patterns.iter().map(|p| p.needle))
+                .expect("valid pattern needles")
+        });
+        scan_with_automaton(automaton, self.patterns, tool_name, text)
+    }
 }
 
 /// Single-pass scan of `text` against `automaton`/`patterns`.

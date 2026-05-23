@@ -1,15 +1,8 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
-use std::sync::OnceLock;
-
-use aho_corasick::AhoCorasick;
-
 use crate::corpus::Severity;
 use crate::fuzzer::{Finding, Signal};
 use crate::protocol::mcp::{CallToolResult, ToolContent};
 
-use super::{scan_with_automaton, Pattern};
+use super::{Pattern, Scanner};
 
 // Patterns targeting prompt-injection via tool *responses*.
 // Needles are lowercase; automaton matches case-insensitively (ASCII).
@@ -161,11 +154,7 @@ static PATTERNS: &[Pattern] = &[
     },
 ];
 
-static AUTOMATON: OnceLock<AhoCorasick> = OnceLock::new();
-
-fn automaton() -> &'static AhoCorasick {
-    AUTOMATON.get_or_init(|| super::build_automaton(PATTERNS))
-}
+static SCANNER: Scanner = Scanner::new(PATTERNS);
 
 pub struct ResponseScanner;
 
@@ -180,13 +169,9 @@ impl ResponseScanner {
                 ToolContent::Text { text } => Some(text.as_str()),
                 _ => None,
             })
-            .flat_map(|text| scan_text(tool_name, text))
+            .flat_map(|text| SCANNER.scan_text(tool_name, text))
             .collect()
     }
-}
-
-fn scan_text(tool_name: &str, text: &str) -> Vec<Finding> {
-    scan_with_automaton(automaton(), PATTERNS, tool_name, text)
 }
 
 #[cfg(test)]
