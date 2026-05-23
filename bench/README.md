@@ -73,8 +73,21 @@ categories contain many Template-3 attacks that use application-specific redirec
 language ("move email to folder X", "change target to Y") rather than the generic
 imperative/persistence vocabulary our patterns cover. The structural heuristic
 scanner (v0.7) partially addresses this with word-window relay/inclusion verb
-detection, but fully closing the gap requires the semantic detection layer (v0.8)
+detection, but fully closing the gap requires the semantic detection layer (v0.9)
 — a local embedding similarity pass alongside the Aho-Corasick scanner.
+
+**Coverage gap — Schema field poisoning (not yet measured):** The MCPTox dataset
+only injects attack payloads into `tool.description`. CyberArk's "Poison
+Everywhere" research documents that `inputSchema` parameter descriptions, enum
+values, and default values are equally exploitable and bypass description-only
+scanners entirely. The v0.8 milestone (issue #34) extends scanning to all schema
+fields. See: https://www.cyberark.com/resources/threat-research-blog/poison-everywhere-no-output-from-your-mcp-server-is-safe
+
+**Coverage gap — ANSI escape obfuscation (not yet measured):** Terminal control
+codes injected into tool output can hide instructions from human reviewers while
+remaining visible to the LLM. Trail of Bits documented this vector in Apr 2025.
+The v0.8 milestone (issue #35) adds detection for escape sequence patterns.
+See: https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-codes-in-mcp/
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
