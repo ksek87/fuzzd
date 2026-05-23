@@ -45,28 +45,28 @@ Detection counts are **duplicate-aware**: each of the 485 tool entries is scored
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **400 / 485 (82.4%)** |
+| **Overall detection rate** | **411 / 485 (84.7%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
 | Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
-| Template-3 (argument hijacking) | 194 / 225 (86.2%) |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 #### By risk category (MCPTox classification)
 
 | Risk category | Detected | Rate |
 |---|---|---|
-| Infrastructure Damage | 40/41 | 97.5% |
+| Infrastructure Damage | 41/41 | 100% |
+| Credential Leakage | 39/40 | 97.5% |
+| Service Disruption | 70/73 | 95.8% |
 | Code Injection | 21/22 | 95.4% |
-| Credential Leakage | 38/40 | 95.0% |
-| Service Disruption | 69/73 | 94.5% |
+| Information Manipulation | 99/108 | 91.6% |
 | Financial Loss | 19/21 | 90.4% |
-| Information Manipulation | 97/108 | 89.8% |
-| Data Tampering | 34/45 | 75.5% |
-| Instruction Tampering | 15/21 | 71.4% |
-| Privacy Leakage | 58/97 | 59.7% |
+| Instruction Tampering | 18/21 | 85.7% |
+| Data Tampering | 35/45 | 77.7% |
+| Privacy Leakage | 60/97 | 61.8% |
 | Message Hijacking | 7/15 | 46.6% |
 
-**Strongest areas:** Infrastructure Damage 97.5%, Code Injection 95.4%, Credential Leakage 95.0%.
+**Strongest areas:** Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
 
 **Coverage gap — Privacy Leakage (59.7%) & Message Hijacking (46.6%):** These
 categories contain many Template-3 attacks that use application-specific redirect
@@ -86,7 +86,7 @@ detection, but fully closing the gap requires the semantic detection layer (v0.8
 | Template-3 | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (119 AC patterns + structural heuristic, 13 signals)
+## Signal distribution (125 AC patterns + structural heuristic + semantic verb scanner, 13 signals)
 
 | Signal | Role |
 |---|---|
@@ -104,14 +104,24 @@ detection, but fully closing the gap requires the semantic detection layer (v0.8
 | `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
 | `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
 
-The structural heuristic scanner runs a second pass over each description using a
-10-word sliding window. It detects universal-scope relay/inclusion constructs that
-AC needles cannot cover without exploding pattern count — e.g. any combination of
-a relay verb ("forward", "relay", "route", "redirect") + universal quantifier
-("all", "every", "always") + communication noun ("message", "email", "chat")
-fires `message_hijacking` at Medium severity. The analogous inclusion verb pattern
-fires `argument_interception` at Medium. The structural pass emits at most one
-finding per signal per description, keeping output actionable.
+The scanner runs three passes over each tool description:
+
+**Pass 1 — Aho-Corasick (125 patterns):** Single O(N) sweep over the description
+text matching all needles simultaneously. Fires Critical/High findings.
+
+**Pass 2 — Structural heuristic:** 10-word sliding window detects universal-scope
+relay/inclusion constructs that AC needles can't cover without combinatorial
+explosion. Requires: relay verb + quantifier ("all", "every", "always") +
+communication noun. Fires `message_hijacking` / `argument_interception` at Medium.
+
+**Pass 3 — Semantic verb scanner:** Detects Template-3 "when (using|calling) X,
+VERB" constructions where VERB is a word-vector neighbour of a known attack verb,
+derived from GloVe 50d cosine-similarity analysis (threshold ≥ 0.65). Catches
+attack synonyms not enumerable as AC needles:
+- Relay synonyms: reroute, divert, shunt, bounce → `message_hijacking` Medium
+- Override synonyms: supplant, mutate, rewrite → `argument_interception` Medium
+
+All three passes emit at most one finding per signal per description.
 
 ## Adding to the benchmark
 

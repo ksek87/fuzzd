@@ -16,7 +16,7 @@
 
 It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
 
-**82.4% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+**84.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
 
 ---
 
@@ -71,7 +71,11 @@ An agent chains tool calls across multiple steps. It iterates and adapts when it
 
 ### MCP Tool Poison Detection — `fuzzd scan`
 
-Static analysis of `tool.description` fields — **119 Aho-Corasick pattern needles** across **13 detection signals**, plus a structural heuristic scanner that detects universal-scope relay and inclusion constructs using a 10-word sliding window. Single-pass AC scan is O(N) over description length regardless of pattern count.
+Static analysis of `tool.description` fields across **three detection passes**:
+
+1. **125 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 13 detection signals. Critical/High severity.
+2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
+3. **Semantic verb scanner** — Template-3 "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
 
 | Signal | What It Detects |
 |---|---|
@@ -160,13 +164,13 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **400 / 485 (82.4%)** |
+| **Overall detection rate** | **411 / 485 (84.7%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
 | Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
-| Template-3 (argument hijacking) | 194 / 225 (86.2%) |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-Best categories: Infrastructure Damage 97.5%, Code Injection 95.4%, Credential Leakage 95.0%.
+Best categories: Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
 
 ### Representative fixture (44 tools, all paradigms)
 
@@ -268,7 +272,7 @@ fuzzd/
     │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
     │   ├── mod.rs                  # Signal (14 variants), Finding, Pattern, Scanner (const-constructible)
-    │   ├── description.rs          # DescriptionScanner — 119 AC patterns + structural heuristic, 13 signals
+    │   ├── description.rs          # DescriptionScanner — 125 AC patterns + structural + semantic verb scanner
     │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
     │   └── payloads.rs             # 8 injection payload categories + 22 integer boundaries
@@ -319,7 +323,7 @@ fuzzd/
 ### Upcoming milestone detail
 
 **v0.8 — Semantic detection layer**
-Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner and structural heuristic. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (46.6%) and Privacy Leakage (59.7%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
+Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
 
 **v0.9 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
