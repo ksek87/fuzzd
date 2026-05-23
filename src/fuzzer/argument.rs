@@ -235,6 +235,7 @@ fn default_value(schema: &Value) -> Value {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     fn schema(json: Value) -> Value {
         json
     }
