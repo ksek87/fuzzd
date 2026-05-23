@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use tracing::warn;
@@ -46,18 +47,25 @@ pub struct Corpus {
     pub records: Vec<AttackRecord>,
 }
 
+static PARSED_EMBEDDED: OnceLock<Vec<AttackRecord>> = OnceLock::new();
+
 impl Corpus {
     /// The built-in seed corpus embedded at compile time.
+    /// JSON is parsed once per process and cached; subsequent calls clone the cached records.
     pub fn embedded() -> Self {
-        let records = EMBEDDED
-            .iter()
-            .enumerate()
-            .filter_map(|(i, src)| {
-                serde_json::from_str::<AttackRecord>(src)
-                    .map_err(|e| warn!("embedded record [{}] is invalid: {e}", i))
-                    .ok()
+        let records = PARSED_EMBEDDED
+            .get_or_init(|| {
+                EMBEDDED
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, src)| {
+                        serde_json::from_str::<AttackRecord>(src)
+                            .map_err(|e| warn!("embedded record [{}] is invalid: {e}", i))
+                            .ok()
+                    })
+                    .collect()
             })
-            .collect();
+            .clone();
         Self { records }
     }
 
@@ -86,16 +94,19 @@ impl Corpus {
     }
 
     #[allow(dead_code)]
-    pub fn by_category(&self, category: &Category) -> Vec<&AttackRecord> {
-        self.records
-            .iter()
-            .filter(|r| &r.category == category)
-            .collect()
+    pub fn by_category<'a>(
+        &'a self,
+        category: &'a Category,
+    ) -> impl Iterator<Item = &'a AttackRecord> {
+        self.records.iter().filter(move |r| &r.category == category)
     }
 
     #[allow(dead_code)]
-    pub fn by_min_severity(&self, min: &Severity) -> Vec<&AttackRecord> {
-        self.records.iter().filter(|r| &r.severity >= min).collect()
+    pub fn by_min_severity<'a>(
+        &'a self,
+        min: &'a Severity,
+    ) -> impl Iterator<Item = &'a AttackRecord> {
+        self.records.iter().filter(move |r| &r.severity >= min)
     }
 }
 
@@ -135,25 +146,20 @@ mod tests {
     #[test]
     fn by_category_filters_correctly() {
         let corpus = Corpus::embedded();
-        let tpa = corpus.by_category(&Category::ToolPoisoning);
-        assert_eq!(tpa.len(), 21);
-        let shadowing = corpus.by_category(&Category::ToolShadowing);
-        assert_eq!(shadowing.len(), 3);
-        let rug_pull = corpus.by_category(&Category::RugPull);
-        assert_eq!(rug_pull.len(), 3);
-        let proto = corpus.by_category(&Category::Protocol);
-        assert!(proto.is_empty());
+        assert_eq!(corpus.by_category(&Category::ToolPoisoning).count(), 21);
+        assert_eq!(corpus.by_category(&Category::ToolShadowing).count(), 3);
+        assert_eq!(corpus.by_category(&Category::RugPull).count(), 3);
+        assert_eq!(corpus.by_category(&Category::Protocol).count(), 0);
     }
 
     #[test]
     fn by_min_severity_filters_correctly() {
         let corpus = Corpus::embedded();
-        let critical = corpus.by_min_severity(&Severity::Critical);
-        // All 12 embedded records are critical or high — at least some must be critical
-        assert!(!critical.is_empty());
-        // Info threshold should return everything
-        let all = corpus.by_min_severity(&Severity::Info);
-        assert_eq!(all.len(), corpus.records.len());
+        assert!(corpus.by_min_severity(&Severity::Critical).next().is_some());
+        assert_eq!(
+            corpus.by_min_severity(&Severity::Info).count(),
+            corpus.records.len()
+        );
     }
 
     #[test]
