@@ -16,12 +16,14 @@ mod utils;
 
 use cli::{Cli, Command, CorpusAction, TransportKind};
 use corpus::{Category, Corpus, Severity};
+use fuzzer::argument::ArgumentFuzzer;
 use fuzzer::description::DescriptionScanner;
 use fuzzer::Finding;
 use protocol::mcp::ListToolsResult;
 use protocol::transport::Transport;
 use reporter::BenchmarkReport;
 use runner::harness::Harness;
+use runner::observer::Observer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -132,19 +134,34 @@ async fn main() -> Result<()> {
 async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs) -> Result<()> {
     harness.initialize().await?;
     let tools = harness.enumerate_tools().await?;
-    harness.close().await?;
 
-    // Deduplicate attack modules so passing the same flag twice doesn't double-scan.
+    // Deduplicate so the same module flag passed twice doesn't double-scan.
     let unique_attacks: HashSet<&cli::AttackModule> = args.attacks.iter().collect();
     let mut findings = Vec::new();
-    for module in unique_attacks {
+
+    // Static analysis — no live connection needed after enumeration.
+    if unique_attacks.contains(&cli::AttackModule::ToolPoisoning) {
+        findings.extend(DescriptionScanner::scan(&tools));
+    }
+
+    // Dynamic analysis — argument boundary fuzzer with response scanning.
+    let mut observer = Observer::new(harness);
+    if unique_attacks.contains(&cli::AttackModule::Argument) {
+        for tool in &tools {
+            for case in ArgumentFuzzer::fuzz(&tool.input_schema) {
+                if let Err(e) = observer.call_tool(&tool.name, Some(case.args)).await {
+                    eprintln!("warn: fuzz {}/{}: {e}", tool.name, case.label);
+                }
+            }
+        }
+        findings.extend(observer.all_findings().cloned());
+    }
+    observer.close().await?;
+
+    for module in &unique_attacks {
         match module {
-            cli::AttackModule::ToolPoisoning => {
-                findings.extend(DescriptionScanner::scan(&tools));
-            }
-            other => {
-                eprintln!("warning: attack module '{other}' not yet implemented — skipping");
-            }
+            cli::AttackModule::ToolPoisoning | cli::AttackModule::Argument => {}
+            other => eprintln!("warning: attack module '{other}' not yet implemented — skipping"),
         }
     }
 

@@ -1,6 +1,3 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 use anyhow::Result;
 use serde_json::Value;
 
@@ -12,6 +9,7 @@ use crate::runner::harness::Harness;
 
 /// Record of a single observed tool call and any response-level findings.
 pub struct ObservedCall {
+    #[allow(dead_code)]
     pub tool_name: String,
     pub findings: Vec<Finding>,
 }
@@ -45,6 +43,7 @@ impl<T: Transport> Observer<T> {
     }
 
     /// Enumerate tools from the underlying harness (cached after first call).
+    #[allow(dead_code)]
     pub async fn enumerate_tools(&mut self) -> Result<Vec<ToolDefinition>> {
         self.harness.enumerate_tools().await
     }
@@ -54,6 +53,7 @@ impl<T: Transport> Observer<T> {
     }
 
     /// All observed tool calls in order, each with any response findings.
+    #[allow(dead_code)]
     pub fn log(&self) -> &[ObservedCall] {
         &self.log
     }
@@ -64,6 +64,7 @@ impl<T: Transport> Observer<T> {
     }
 
     /// Whether any observed response contained a blocking (≥ High) finding.
+    #[allow(dead_code)]
     pub fn has_blocking_findings(&self) -> bool {
         use crate::corpus::Severity;
         self.all_findings().any(|f| f.severity >= Severity::High)
