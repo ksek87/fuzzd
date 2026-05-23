@@ -267,7 +267,7 @@ fuzzd/
     │   ├── harness.rs              # Harness<T>: enumerate_tools() with cache, call_tool()
     │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
-    │   ├── mod.rs                  # Signal enum (13 variants), Finding, scan_with_automaton
+    │   ├── mod.rs                  # Signal (14 variants), Finding, Pattern, Scanner (const-constructible)
     │   ├── description.rs          # DescriptionScanner — 102 patterns, 13 signals
     │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
@@ -275,6 +275,8 @@ fuzzd/
     ├── corpus/
     │   ├── schema.rs               # AttackRecord, Category (6), Severity (5), Vector
     │   └── loader.rs               # Corpus::embedded() (OnceLock-cached) + load_file() + load_dir()
+    ├── reporter/
+    │   └── mod.rs                  # SARIF 2.1 / JSON / Markdown output; write_findings(), write_benchmark(), BenchmarkReport
     ├── utils.rs                    # drain_sse_events(), sse_data(), extract_snippet()
     └── testutil.rs                 # MockTransport, ok_response(), tools_response()
 ```
@@ -303,8 +305,8 @@ fuzzd/
 | 4 | v0.4 — Argument fuzzer (boundary mutation) | ✅ Done |
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
 | 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
-| 7 | v0.7 — Semantic detection layer (embedding-based similarity) | 🔜 Next |
-| 8 | v0.8 — SARIF output + GitHub Security tab integration | 🔜 Planned |
+| 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
+| 8 | v0.8 — Semantic detection layer (embedding-based similarity) | 🔜 Next |
 | 9 | v0.9 — GitHub Action (Marketplace) | 🔜 Planned |
 | 10 | v0.10 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
 | 11 | v0.11 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
@@ -316,11 +318,8 @@ fuzzd/
 
 ### Upcoming milestone detail
 
-**v0.7 — Semantic detection layer**
+**v0.8 — Semantic detection layer**
 Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (40%) and Privacy Leakage (59.8%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
-
-**v0.8 — SARIF output + GitHub Security tab integration**
-Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage MCP security findings where they already work.
 
 **v0.9 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
