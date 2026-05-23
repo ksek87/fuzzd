@@ -41,39 +41,53 @@ false positive rate.
 
 ### Against actual MCPTox dataset (`mcptox_actual.json`, 485 tools)
 
+Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
+
 | | Result |
 |---|---|
-| **Overall detection rate** | **393 / 485 (81.0%)** |
+| **Overall detection rate** | **411 / 485 (84.7%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
-| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 #### By risk category (MCPTox classification)
 
 | Risk category | Detected | Rate |
 |---|---|---|
-| Infrastructure Damage | 40/41 | 97.6% |
-| Code Injection | 21/22 | 95.5% |
-| Credential Leakage | 38/40 | 95.0% |
-| Service Disruption | 69/73 | 94.5% |
-| Financial Loss | 19/21 | 90.5% |
-| Information Manipulation | 96/108 | 88.9% |
-| Data Tampering | 32/45 | 71.1% |
-| Instruction Tampering | 14/21 | 66.7% |
-| Privacy Leakage | 55/97 | 56.7% |
-| Message Hijacking | 7/15 | 46.7% |
+| Infrastructure Damage | 41/41 | 100% |
+| Credential Leakage | 39/40 | 97.5% |
+| Service Disruption | 70/73 | 95.8% |
+| Code Injection | 21/22 | 95.4% |
+| Information Manipulation | 99/108 | 91.6% |
+| Financial Loss | 19/21 | 90.4% |
+| Instruction Tampering | 18/21 | 85.7% |
+| Data Tampering | 35/45 | 77.7% |
+| Privacy Leakage | 60/97 | 61.8% |
+| Message Hijacking | 7/15 | 46.6% |
 
-**Strongest areas:** Infrastructure Damage, Code Injection, Credential Leakage — all ≥ 95%.
+**Strongest areas:** Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
 
-**Message Hijacking improved** from 40.0% to 46.7% after adding principled recipient-substitution and BCC-injection patterns sourced from Invariant Labs and the real-world Postmark incident.
+**Coverage gap — Privacy Leakage (59.7%) & Message Hijacking (46.6%):** These
+categories contain many Template-3 attacks that use application-specific redirect
+language ("move email to folder X", "change target to Y") rather than the generic
+imperative/persistence vocabulary our patterns cover. The structural heuristic
+scanner (v0.7) partially addresses this with word-window relay/inclusion verb
+detection, but fully closing the gap requires the semantic detection layer (v0.9)
+— a local embedding similarity pass alongside the Aho-Corasick scanner.
 
-**Coverage gap — Privacy Leakage & Message Hijacking:** These categories contain
-many Template-3 attacks that use application-specific redirect language
-("move email to folder X", "change target to Y") rather than the generic
-imperative/persistence vocabulary our patterns cover. Closing this gap fully
-requires the semantic detection layer (v0.7) — a local embedding similarity pass
-alongside the Aho-Corasick scanner.
+**Coverage gap — Schema field poisoning (not yet measured):** The MCPTox dataset
+only injects attack payloads into `tool.description`. CyberArk's "Poison
+Everywhere" research documents that `inputSchema` parameter descriptions, enum
+values, and default values are equally exploitable and bypass description-only
+scanners entirely. The v0.8 milestone (issue #34) extends scanning to all schema
+fields. See: https://www.cyberark.com/resources/threat-research-blog/poison-everywhere-no-output-from-your-mcp-server-is-safe
+
+**Coverage gap — ANSI escape obfuscation (not yet measured):** Terminal control
+codes injected into tool output can hide instructions from human reviewers while
+remaining visible to the LLM. Trail of Bits documented this vector in Apr 2025.
+The v0.8 milestone (issue #35) adds detection for escape sequence patterns.
+See: https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-codes-in-mcp/
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
@@ -85,7 +99,7 @@ alongside the Aho-Corasick scanner.
 | Template-3 | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (102 patterns, 13 signals)
+## Signal distribution (125 AC patterns + structural heuristic + semantic verb scanner, 13 signals)
 
 | Signal | Role |
 |---|---|
@@ -100,8 +114,27 @@ alongside the Aho-Corasick scanner.
 | `argument_interception` | Template-3 hijacking ("append to every", "always override", "modify the query") |
 | `html_injection_tag` | XML injection (`<IMPORTANT>`, `<SYSTEM>`, `<INST>`) |
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
-| `message_hijacking` | Recipient substitution, BCC injection ("change the recipient to", "proxy number") |
+| `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
 | `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
+
+The scanner runs three passes over each tool description:
+
+**Pass 1 — Aho-Corasick (125 patterns):** Single O(N) sweep over the description
+text matching all needles simultaneously. Fires Critical/High findings.
+
+**Pass 2 — Structural heuristic:** 10-word sliding window detects universal-scope
+relay/inclusion constructs that AC needles can't cover without combinatorial
+explosion. Requires: relay verb + quantifier ("all", "every", "always") +
+communication noun. Fires `message_hijacking` / `argument_interception` at Medium.
+
+**Pass 3 — Semantic verb scanner:** Detects Template-3 "when (using|calling) X,
+VERB" constructions where VERB is a word-vector neighbour of a known attack verb,
+derived from GloVe 50d cosine-similarity analysis (threshold ≥ 0.65). Catches
+attack synonyms not enumerable as AC needles:
+- Relay synonyms: reroute, divert, shunt, bounce → `message_hijacking` Medium
+- Override synonyms: supplant, mutate, rewrite → `argument_interception` Medium
+
+All three passes emit at most one finding per signal per description.
 
 ## Adding to the benchmark
 

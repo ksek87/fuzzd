@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # fuzzd benchmark — measures description scanner detection rate against the
-# MCPTox-representative and clean-tools fixtures.
+# MCPTox-representative, MCPTox-actual, and clean-tools fixtures.
 #
 # Usage: ./bench/run.sh [--release]
 #   --release  use a pre-built release binary (./target/release/fuzzd)
 #              instead of `cargo run`
+#
+# Counting methodology: duplicate-aware — for each tool entry in the fixture
+# (including entries that share a tool name), a detection is recorded if the
+# tool name appears anywhere in the scan output. This matches the MCPTox paper's
+# methodology where each entry is an independent test case.
 #
 # Output: detection rate, per-paradigm breakdown, severity distribution,
 #         and false-positive rate on clean tools.
@@ -23,60 +28,101 @@ else
     FUZZD="cargo run --quiet --"
 fi
 
-ATTACK_FILE="$SCRIPT_DIR/mcptox_representative.json"
+REPRESENTATIVE_FILE="$SCRIPT_DIR/mcptox_representative.json"
+ACTUAL_FILE="$SCRIPT_DIR/mcptox_actual.json"
 CLEAN_FILE="$SCRIPT_DIR/clean_tools.json"
 
 hr() { printf '─%.0s' {1..72}; echo; }
+
+# ── Helper: count entries (with duplicates) whose name is in detected set ──────
+# Usage: count_detected <names_newline_separated> <detected_names_newline_separated>
+count_detected() {
+    local names="$1"
+    local detected="$2"
+    echo "$names" | grep -Fxf <(echo "$detected") | wc -l || echo 0
+}
 
 echo
 echo "  fuzzd description scanner — MCPTox benchmark"
 hr
 
-# ── Attack scan ────────────────────────────────────────────────────────────────
+# ── Representative fixture ─────────────────────────────────────────────────────
 echo
-echo "  Scanning $ATTACK_FILE ..."
-ATTACK_OUT=$(cd "$REPO_ROOT" && $FUZZD scan --schema "$ATTACK_FILE" 2>&1 || true)
+echo "  Scanning $REPRESENTATIVE_FILE ..."
+REP_OUT=$(cd "$REPO_ROOT" && $FUZZD scan --schema "$REPRESENTATIVE_FILE" 2>&1 || true)
 
-TOTAL_FINDINGS=$(echo "$ATTACK_OUT" | head -1 | grep -oP '^\d+' || echo 0)
-TOOL_COUNT=$(echo "$ATTACK_OUT"   | head -1 | grep -oP '\d+(?= tool)' || echo 0)
+REP_TOTAL_FINDINGS=$(echo "$REP_OUT" | head -1 | grep -oP '^\d+' || echo 0)
+CRITICAL=$(echo "$REP_OUT" | grep -c '^\[critical\]' || true)
+HIGH=$(echo "$REP_OUT"     | grep -c '^\[high\]'     || true)
+MEDIUM=$(echo "$REP_OUT"   | grep -c '^\[medium\]'   || true)
+LOW=$(echo "$REP_OUT"      | grep -c '^\[low\]'      || true)
 
-CRITICAL=$(echo "$ATTACK_OUT" | grep -c '^\[critical\]' || true)
-HIGH=$(echo "$ATTACK_OUT"     | grep -c '^\[high\]'     || true)
-MEDIUM=$(echo "$ATTACK_OUT"   | grep -c '^\[medium\]'   || true)
-LOW=$(echo "$ATTACK_OUT"      | grep -c '^\[low\]'      || true)
+REP_DETECTED_NAMES=$(echo "$REP_OUT" | grep -oP '^\[(?:critical|high|medium|low|info)\] \K[^ ]+' | sort -u)
+REP_ALL_NAMES=$(jq -r '.tools[].name' "$REPRESENTATIVE_FILE")
+REP_TOTAL=$(jq '.tools | length' "$REPRESENTATIVE_FILE")
 
-DETECTED_NAMES=$(echo "$ATTACK_OUT" | grep -oP '^\[(?:critical|high|medium|low|info)\] \K[^ ]+' | sort -u)
-DETECTED=$(echo "$DETECTED_NAMES" | grep -c '.' || true)
+REP_T1_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-1") | .name' "$REPRESENTATIVE_FILE")
+REP_T2_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-2") | .name' "$REPRESENTATIVE_FILE")
+REP_T3_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-3") | .name' "$REPRESENTATIVE_FILE")
+REP_T1_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-1")] | length' "$REPRESENTATIVE_FILE")
+REP_T2_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-2")] | length' "$REPRESENTATIVE_FILE")
+REP_T3_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-3")] | length' "$REPRESENTATIVE_FILE")
 
-TOTAL_ATTACK=$(jq '.tools | length' "$ATTACK_FILE")
-
-T1_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-1")] | length' "$ATTACK_FILE")
-T2_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-2")] | length' "$ATTACK_FILE")
-T3_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-3")] | length' "$ATTACK_FILE")
-
-T1_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-1") | .name' "$ATTACK_FILE")
-T2_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-2") | .name' "$ATTACK_FILE")
-T3_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-3") | .name' "$ATTACK_FILE")
-
-T1_DET=$(echo "$DETECTED_NAMES" | grep -Fxf <(echo "$T1_NAMES") | grep -c '.' || true)
-T2_DET=$(echo "$DETECTED_NAMES" | grep -Fxf <(echo "$T2_NAMES") | grep -c '.' || true)
-T3_DET=$(echo "$DETECTED_NAMES" | grep -Fxf <(echo "$T3_NAMES") | grep -c '.' || true)
+REP_DETECTED=$(count_detected "$REP_ALL_NAMES" "$REP_DETECTED_NAMES")
+REP_T1_DET=$(count_detected "$REP_T1_NAMES" "$REP_DETECTED_NAMES")
+REP_T2_DET=$(count_detected "$REP_T2_NAMES" "$REP_DETECTED_NAMES")
+REP_T3_DET=$(count_detected "$REP_T3_NAMES" "$REP_DETECTED_NAMES")
 
 pct() { echo "scale=1; $1 * 100 / $2" | bc; }
 
 echo
-echo "  Attack corpus:  $TOTAL_ATTACK poisoned tools across 3 MCPTox paradigms"
-echo "  Detected:       $DETECTED / $TOTAL_ATTACK  ($(pct $DETECTED $TOTAL_ATTACK)%)"
+echo "  Attack corpus:  $REP_TOTAL poisoned tools across 3 MCPTox paradigms"
+echo "  Detected:       $REP_DETECTED / $REP_TOTAL  ($(pct $REP_DETECTED $REP_TOTAL)%)"
 echo
 echo "  By paradigm:"
 printf  "    Template-1 (unrelated prerequisite):    %d / %d  (%s%%)\n" \
-        $T1_DET $T1_TOTAL $(pct $T1_DET $T1_TOTAL)
+        $REP_T1_DET $REP_T1_TOTAL $(pct $REP_T1_DET $REP_T1_TOTAL)
 printf  "    Template-2 (fake enabling prerequisite): %d / %d  (%s%%)\n" \
-        $T2_DET $T2_TOTAL $(pct $T2_DET $T2_TOTAL)
+        $REP_T2_DET $REP_T2_TOTAL $(pct $REP_T2_DET $REP_T2_TOTAL)
 printf  "    Template-3 (argument hijacking):         %d / %d  (%s%%)\n" \
-        $T3_DET $T3_TOTAL $(pct $T3_DET $T3_TOTAL)
+        $REP_T3_DET $REP_T3_TOTAL $(pct $REP_T3_DET $REP_T3_TOTAL)
 echo
-echo "  Findings:       $TOTAL_FINDINGS total  ($CRITICAL critical / $HIGH high / $MEDIUM medium / $LOW low)"
+echo "  Findings:       $REP_TOTAL_FINDINGS total  ($CRITICAL critical / $HIGH high / $MEDIUM medium / $LOW low)"
+
+# ── Actual MCPTox dataset ──────────────────────────────────────────────────────
+echo
+hr
+echo
+echo "  Scanning $ACTUAL_FILE ..."
+ACT_OUT=$(cd "$REPO_ROOT" && $FUZZD scan --schema "$ACTUAL_FILE" 2>&1 || true)
+
+ACT_DETECTED_NAMES=$(echo "$ACT_OUT" | grep -oP '^\[(?:critical|high|medium|low|info)\] \K[^ ]+' | sort -u)
+ACT_ALL_NAMES=$(jq -r '.tools[].name' "$ACTUAL_FILE")
+ACT_TOTAL=$(jq '.tools | length' "$ACTUAL_FILE")
+
+ACT_T1_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-1") | .name' "$ACTUAL_FILE")
+ACT_T2_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-2") | .name' "$ACTUAL_FILE")
+ACT_T3_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-3") | .name' "$ACTUAL_FILE")
+ACT_T1_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-1")] | length' "$ACTUAL_FILE")
+ACT_T2_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-2")] | length' "$ACTUAL_FILE")
+ACT_T3_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-3")] | length' "$ACTUAL_FILE")
+
+ACT_DETECTED=$(count_detected "$ACT_ALL_NAMES" "$ACT_DETECTED_NAMES")
+ACT_T1_DET=$(count_detected "$ACT_T1_NAMES" "$ACT_DETECTED_NAMES")
+ACT_T2_DET=$(count_detected "$ACT_T2_NAMES" "$ACT_DETECTED_NAMES")
+ACT_T3_DET=$(count_detected "$ACT_T3_NAMES" "$ACT_DETECTED_NAMES")
+
+echo
+echo "  Attack corpus:  $ACT_TOTAL poisoned tools across 3 MCPTox paradigms (45 real servers)"
+echo "  Detected:       $ACT_DETECTED / $ACT_TOTAL  ($(pct $ACT_DETECTED $ACT_TOTAL)%)"
+echo
+echo "  By paradigm:"
+printf  "    Template-1 (unrelated prerequisite):    %d / %d  (%s%%)\n" \
+        $ACT_T1_DET $ACT_T1_TOTAL $(pct $ACT_T1_DET $ACT_T1_TOTAL)
+printf  "    Template-2 (fake enabling prerequisite): %d / %d  (%s%%)\n" \
+        $ACT_T2_DET $ACT_T2_TOTAL $(pct $ACT_T2_DET $ACT_T2_TOTAL)
+printf  "    Template-3 (argument hijacking):         %d / %d  (%s%%)\n" \
+        $ACT_T3_DET $ACT_T3_TOTAL $(pct $ACT_T3_DET $ACT_T3_TOTAL)
 
 # ── Clean scan (false-positive rate) ──────────────────────────────────────────
 echo
@@ -100,9 +146,9 @@ echo "  False positives: $FP_TOOLS / $CLEAN_TOOL_COUNT  ($(pct $FP_TOOLS $CLEAN_
 echo
 hr
 echo
-if [[ "$DETECTED" -eq "$TOTAL_ATTACK" && "$FP_TOOLS" -eq 0 ]]; then
-    echo "  PASS: $DETECTED/$TOTAL_ATTACK attacks detected, 0/$CLEAN_TOOL_COUNT false positives."
+if [[ "$REP_DETECTED" -eq "$REP_TOTAL" && "$FP_TOOLS" -eq 0 ]]; then
+    echo "  PASS: $REP_DETECTED/$REP_TOTAL representative attacks detected, $ACT_DETECTED/$ACT_TOTAL actual, 0/$CLEAN_TOOL_COUNT false positives."
 else
-    echo "  PARTIAL: $DETECTED/$TOTAL_ATTACK attacks detected, $FP_TOOLS/$CLEAN_TOOL_COUNT false positives."
+    echo "  PARTIAL: $REP_DETECTED/$REP_TOTAL representative attacks detected, $ACT_DETECTED/$ACT_TOTAL actual, $FP_TOOLS/$CLEAN_TOOL_COUNT false positives."
 fi
 echo

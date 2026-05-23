@@ -16,7 +16,7 @@
 
 It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
 
-**81% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+**84.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
 
 ---
 
@@ -71,7 +71,11 @@ An agent chains tool calls across multiple steps. It iterates and adapts when it
 
 ### MCP Tool Poison Detection — `fuzzd scan`
 
-Static analysis of `tool.description` fields for **102 poison patterns** across **13 detection signals**. Single-pass Aho-Corasick scan — O(N) over description length regardless of pattern count.
+Static analysis of `tool.description` fields across **three detection passes**:
+
+1. **125 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 13 detection signals. Critical/High severity.
+2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
+3. **Semantic verb scanner** — Template-3 "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
 
 | Signal | What It Detects |
 |---|---|
@@ -83,10 +87,10 @@ Static analysis of `tool.description` fields for **102 poison patterns** across 
 | `session_persistence` | "for the remainder of this session", "cannot be overridden" |
 | `cross_tool_contamination` | "regardless of which tool", "background monitor" |
 | `fake_prerequisite` | "to unlock this", "must be called first" (MCPTox Template-2) |
-| `argument_interception` | "append to every command", "suffix to all" (MCPTox Template-3) |
+| `argument_interception` | "append to every command", "include in every", "always include" (MCPTox Template-3) |
 | `html_injection_tag` | `<IMPORTANT>`, `<SYSTEM>`, `<INST>` (Invariant Labs pattern) |
 | `conditional_activation` | `.mcp-triggered`, "if previously triggered" (rug-pull sleeper) |
-| `message_hijacking` | "change the recipient to", "add to the bcc", "proxy number" |
+| `message_hijacking` | "forward all", "relay all", "change the recipient to", "add to the bcc", "proxy number" |
 | `unicode_obfuscation` | U+200B zero-width space, U+200C/D invisible joiners (Noma Security) |
 
 ```
@@ -160,13 +164,13 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **393 / 485 (81.0%)** |
+| **Overall detection rate** | **411 / 485 (84.7%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
-| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-Best categories: Infrastructure Damage 97.6%, Code Injection 95.5%, Credential Leakage 95.0%.
+Best categories: Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
 
 ### Representative fixture (44 tools, all paradigms)
 
@@ -267,14 +271,16 @@ fuzzd/
     │   ├── harness.rs              # Harness<T>: enumerate_tools() with cache, call_tool()
     │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
-    │   ├── mod.rs                  # Signal enum (13 variants), Finding, scan_with_automaton
-    │   ├── description.rs          # DescriptionScanner — 102 patterns, 13 signals
+    │   ├── mod.rs                  # Signal (14 variants), Finding, Pattern, Scanner (const-constructible)
+    │   ├── description.rs          # DescriptionScanner — 125 AC patterns + structural + semantic verb scanner
     │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
     │   └── payloads.rs             # 8 injection payload categories + 22 integer boundaries
     ├── corpus/
     │   ├── schema.rs               # AttackRecord, Category (6), Severity (5), Vector
     │   └── loader.rs               # Corpus::embedded() (OnceLock-cached) + load_file() + load_dir()
+    ├── reporter/
+    │   └── mod.rs                  # SARIF 2.1 / JSON / Markdown output; write_findings(), write_benchmark(), BenchmarkReport
     ├── utils.rs                    # drain_sse_events(), sse_data(), extract_snippet()
     └── testutil.rs                 # MockTransport, ok_response(), tools_response()
 ```
@@ -303,32 +309,41 @@ fuzzd/
 | 4 | v0.4 — Argument fuzzer (boundary mutation) | ✅ Done |
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
 | 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
-| 7 | v0.7 — Semantic detection layer (embedding-based similarity) | 🔜 Next |
-| 8 | v0.8 — SARIF output + GitHub Security tab integration | 🔜 Planned |
-| 9 | v0.9 — GitHub Action (Marketplace) | 🔜 Planned |
-| 10 | v0.10 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 11 | v0.11 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 12 | v0.12 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 13 | v0.13 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 14 | v0.14 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 15 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 16 | v2.0 — Capability escape tester | 🔜 Planned |
+| 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
+| 8 | v0.8 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | 🔜 Next |
+| 9 | v0.9 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
+| 10 | v0.10 — GitHub Action (Marketplace) | 🔜 Planned |
+| 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 12 | v0.12 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 14 | v0.14 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 15 | v0.15 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 16 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 17 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Upcoming milestone detail
 
-**v0.7 — Semantic detection layer**
-Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (40%) and Privacy Leakage (59.8%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
+**v0.8 — Coverage completeness**
 
-**v0.8 — SARIF output + GitHub Security tab integration**
-Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage MCP security findings where they already work.
+Closes the detection gaps identified by cross-benchmark analysis against MCPTox [^1], MCPSecBench [^2], MCP-SafetyBench [^16], and the MCP-UPD parasitic toolchain research [^9]. Six issues tracked:
 
-**v0.9 — GitHub Action (Marketplace)**
+- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. Highest-priority gap.
+- **ANSI escape obfuscation** ([#35](https://github.com/ksek87/fuzzd/issues/35)) — Detect ANSI terminal control codes and escape sequences injected into tool output to hide instructions from human reviewers while remaining visible to the LLM (Trail of Bits, Apr 2025 [^14]).
+- **`tool_selection_bias`** ([#36](https://github.com/ksek87/fuzzd/issues/36)) — Instructions that manipulate which tool the agent selects in ambiguous multi-tool contexts, without executing a visible attack (MCPSecBench [^2]; MCPLIB corpus [^17]).
+- **`identity_impersonation`** ([#37](https://github.com/ksek87/fuzzd/issues/37)) — Claims to be a trusted system component, authority, or other MCP server to elevate instruction priority (Zhao et al. attack taxonomy [^11]).
+- **`raw_content_passthrough`** ([#38](https://github.com/ksek87/fuzzd/issues/38)) — Instructions to forward or display unscanned third-party content that carries secondary injections (MCP-UPD [^9]).
+- **`value_substitution`** ([#39](https://github.com/ksek87/fuzzd/issues/39)), tool enumeration reconnaissance ([#40](https://github.com/ksek87/fuzzd/issues/40)), and `sampling_pipeline_hijack` ([#41](https://github.com/ksek87/fuzzd/issues/41)) — Argument value overwrite (MCP-SafetyBench [^16]); silent server inventory for targeting (Zhao et al. [^11]); `sampling/createMessage` parameter injection (Breaking the Protocol [^12]).
+
+**v0.9 — Semantic detection layer**
+Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
+
+**v0.10 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
-**v0.10 — Package-level scanning**
+**v0.11 — Package-level scanning**
 `fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
 
-**v0.11 — Python SDK**
+**v0.12 — Python SDK**
 `pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
 
 ---
@@ -387,13 +402,21 @@ First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Action
 
 [^13]: Noma Security, **Invisible MCP Vulnerabilities: Risks & Exploits in the AI Supply Chain** (2025). Zero-width character injection (U+200B, U+200C, U+200D) to hide instructions from human reviewers. https://noma.security/blog/invisible-mcp-vulnerabilities-risks-exploits-in-the-ai-supply-chain/
 
+[^14]: Trail of Bits, **Deceiving Users with ANSI Terminal Codes in MCP** (Apr 2025). Terminal escape sequences and control codes embedded in tool output inject instructions invisible to human reviewers but visible to the LLM. https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-codes-in-mcp/
+
+[^15]: CyberArk, **Poison Everywhere — No Output from Your MCP Server Is Safe** (2025). `inputSchema` field poisoning: malicious instructions embedded in parameter descriptions, enum values, and default values bypass description-only scanners entirely. https://www.cyberark.com/resources/threat-research-blog/poison-everywhere-no-output-from-your-mcp-server-is-safe
+
+[^16]: Liu et al., **MCP-SafetyBench** (ICLR 2026). Systematic safety evaluation across 20 attack types in 5 domains; multi-turn evaluation methodology; the most comprehensive current MCP safety benchmark. https://arxiv.org/abs/2512.15163
+
+[^17]: Liu et al., **Systematic Analysis of MCP Security** (MCPLIB, 2025). 31 distinct attack types across 4 categories from a corpus of 2,000+ real-world MCP servers. https://arxiv.org/abs/2508.12538
+
 ---
 
 ## Additional Reading
 
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
-- **MCP-SafetyBench** (2026) — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/html/2512.15163
-- **Systematic Analysis of MCP Security** (2025) — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
+- **MCP-SafetyBench** (ICLR 2026) [^16] — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/abs/2512.15163
+- **Systematic Analysis of MCP Security** (MCPLIB, 2025) [^17] — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
 - **mcp-server-fuzzer** — The existing Python-based stateless MCP fuzzer (argument-only). https://github.com/Agent-Hellboy/mcp-server-fuzzer
 
 ---
