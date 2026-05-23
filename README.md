@@ -23,7 +23,10 @@ It operates at the **tool boundary layer** — scanning `tool.description` field
 ## Quick Start
 
 ```bash
-# Install
+# Pre-built binaries for Linux x86_64, macOS (Intel + Apple Silicon), Windows x86_64
+# available from v0.8 at https://github.com/ksek87/fuzzd/releases
+
+# Install from source (current)
 cargo install --git https://github.com/ksek87/fuzzd
 
 # Scan MCP tool definitions for poison patterns
@@ -236,6 +239,8 @@ It would be easy to wire an LLM into fuzzd to generate novel attack prompts. Tha
 - No audit trail of what was actually tested
 - The attacker model should be exhaustive and reproducible, not probabilistic
 
+The data supports this. The leading commercial alternative (Cisco AI Defense) uses an LLM-as-a-Judge component that reasons from tool descriptions and achieved a **24.6% false positive rate** in independent evaluation against 130 benign MCP servers — flagging one in four legitimate tools as unsafe, even with GPT-5.4 as the backend [^18].
+
 The right model is a **curated, versioned attack corpus** — structured records of known attack patterns derived from research, encoded as reproducible test cases. This is how [Metasploit](https://github.com/rapid7/metasploit-framework), [Nuclei](https://github.com/projectdiscovery/nuclei), and every serious security tool works. The corpus is a first-class artifact.
 
 ---
@@ -310,40 +315,46 @@ fuzzd/
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
 | 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
 | 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
-| 8 | v0.8 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | 🔜 Next |
-| 9 | v0.9 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
-| 10 | v0.10 — GitHub Action (Marketplace) | 🔜 Planned |
-| 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 12 | v0.12 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 14 | v0.14 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 15 | v0.15 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 16 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 17 | v2.0 — Capability escape tester | 🔜 Planned |
+| 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | 🔜 Next |
+| 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | 🔜 Planned |
+| 10 | v0.10 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
+| 11 | v0.11 — GitHub Action (Marketplace) | 🔜 Planned |
+| 12 | v0.12 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 13 | v0.13 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 14 | v0.14 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 15 | v0.15 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 16 | v0.16 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 17 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 18 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Upcoming milestone detail
 
-**v0.8 — Coverage completeness**
+**v0.8 — Suppression workflow** ([#42](https://github.com/ksek87/fuzzd/issues/42))
 
-Closes the detection gaps identified by cross-benchmark analysis against MCPTox [^1], MCPSecBench [^2], MCP-SafetyBench [^16], and the MCP-UPD parasitic toolchain research [^9]. Six issues tracked:
+Makes fuzzd usable as a persistent CI gate. Without this, every human-reviewed false positive re-fires on the next scan and re-blocks the pipeline — teams work around it by disabling the scan entirely. Three parts in dependency order:
 
-- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. Highest-priority gap.
-- **ANSI escape obfuscation** ([#35](https://github.com/ksek87/fuzzd/issues/35)) — Detect ANSI terminal control codes and escape sequences injected into tool output to hide instructions from human reviewers while remaining visible to the LLM (Trail of Bits, Apr 2025 [^14]).
-- **`tool_selection_bias`** ([#36](https://github.com/ksek87/fuzzd/issues/36)) — Instructions that manipulate which tool the agent selects in ambiguous multi-tool contexts, without executing a visible attack (MCPSecBench [^2]; MCPLIB corpus [^17]).
-- **`identity_impersonation`** ([#37](https://github.com/ksek87/fuzzd/issues/37)) — Claims to be a trusted system component, authority, or other MCP server to elevate instruction priority (Zhao et al. attack taxonomy [^11]).
-- **`raw_content_passthrough`** ([#38](https://github.com/ksek87/fuzzd/issues/38)) — Instructions to forward or display unscanned third-party content that carries secondary injections (MCP-UPD [^9]).
-- **`value_substitution`** ([#39](https://github.com/ksek87/fuzzd/issues/39)), tool enumeration reconnaissance ([#40](https://github.com/ksek87/fuzzd/issues/40)), and `sampling_pipeline_hijack` ([#41](https://github.com/ksek87/fuzzd/issues/41)) — Argument value overwrite (MCP-SafetyBench [^16]); silent server inventory for targeting (Zhao et al. [^11]); `sampling/createMessage` parameter injection (Breaking the Protocol [^12]).
+1. **Stable finding fingerprints** — each `Finding` carries an ID derived from `tool_name + signal` (not the matched-text snippet, which changes when descriptions are edited). This ID becomes the `ruleId` in SARIF output and the key in the suppression file.
+2. **Suppression file** (`.fuzzd/suppress.toml`) — repo-local, checked into source control. Each entry records the tool, signal, and a required `reason` string. Suppressed findings still print as `[suppressed]` — they are not silently hidden — but do not count toward the exit-1 threshold. `fuzzd suppress <tool> <signal> --reason "..."` writes the entry.
+3. **GitHub Code Scanning integration** — with stable `ruleId` and `partialFingerprints` populated in SARIF output, findings uploaded via `github/codeql-action/upload-sarif` appear in the Security tab. Human dismissals persist across scans natively — no suppression file needed for GitHub-hosted workflows.
 
-**v0.9 — Semantic detection layer**
+**v0.9 — Coverage completeness**
+
+Closes the detection gaps identified by cross-benchmark analysis against MCPTox [^1], MCPSecBench [^2], MCP-SafetyBench [^16], and the MCP-UPD parasitic toolchain research [^9]. Eight issues tracked (#34–#41):
+
+- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. VIPER-MCP [^18] independently treats `inputSchema` parameter fields as attacker-controlled taint sources. Highest-priority gap.
+- **ANSI escape obfuscation** ([#35](https://github.com/ksek87/fuzzd/issues/35)) — Detect ANSI terminal control codes and escape sequences injected into tool output (Trail of Bits, Apr 2025 [^14]).
+- **New signal classes** ([#36](https://github.com/ksek87/fuzzd/issues/36)–[#41](https://github.com/ksek87/fuzzd/issues/41)) — `tool_selection_bias` (MCPSecBench [^2], MCPLIB [^17]), `identity_impersonation` (Zhao et al. [^11]), `raw_content_passthrough` (MCP-UPD [^9]), `value_substitution` (MCP-SafetyBench [^16]), tool enumeration reconnaissance, `sampling_pipeline_hijack` (Breaking the Protocol [^12]).
+
+**v0.10 — Semantic detection layer**
 Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
 
-**v0.10 — GitHub Action (Marketplace)**
+**v0.11 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
-**v0.11 — Package-level scanning**
+**v0.12 — Package-level scanning**
 `fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
 
-**v0.12 — Python SDK**
+**v0.13 — Python SDK**
 `pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
 
 ---
@@ -410,10 +421,13 @@ First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Action
 
 [^17]: Liu et al., **Systematic Analysis of MCP Security** (MCPLIB, 2025). 31 distinct attack types across 4 categories from a corpus of 2,000+ real-world MCP servers. https://arxiv.org/abs/2508.12538
 
+[^18]: Sun et al., **VIPER-MCP: Detecting and Exploiting Taint-Style Vulnerabilities in Model Context Protocol Servers** (Zhejiang University, 2026). End-to-end automated vulnerability auditing framework combining CodeQL static taint analysis with LLM-driven prompt fuzzing and runtime oracle confirmation. Scanned 39,884 real-world MCP server repos; discovered 106 0-day vulnerabilities (67 CVEs assigned) across command injection, SSRF, and path traversal classes. 4.6% FPR, 7.7% FNR. Complements fuzzd's tool-poisoning detection (server-side implementation vulnerabilities vs. client-side description poisoning). Independently validates that `inputSchema` parameter fields are attacker-controlled taint sources (aligns with issue #34). https://arxiv.org/abs/2605.21392
+
 ---
 
 ## Additional Reading
 
+- **VIPER-MCP** (2026) [^18] — Server-side taint vulnerability detection (command injection, SSRF, path traversal) via CodeQL + LLM fuzzing; 106 0-days, 67 CVEs across 39,884 repos. Complementary to fuzzd (implementation bugs vs. tool poisoning). https://arxiv.org/abs/2605.21392
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
 - **MCP-SafetyBench** (ICLR 2026) [^16] — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/abs/2512.15163
 - **Systematic Analysis of MCP Security** (MCPLIB, 2025) [^17] — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538

@@ -1,14 +1,5 @@
-# Example: Add fuzzd as a security gate in your MCP server's CI pipeline.
-#
-# This workflow scans your server's tool descriptions for Tool Poisoning Attack
-# (TPA) patterns on every push and pull request. If critical or high-severity
-# issues are found, the job fails and the PR is blocked.
-#
-# Prerequisites:
-#   1. Add a step to your build that dumps your tool definitions to tools.json.
-#      For a Node.js MCP server: `node server.js --dump-tools > tools.json`
-#      For a Python MCP server: `python server.py --export-tools > tools.json`
-#   2. tools.json must be MCP tools/list format: {"tools": [...]} or a bare array.
+# fuzzd — MCP security scan for CI pipelines
+# Full documentation: https://github.com/ksek87/fuzzd
 
 name: MCP Security Scan
 
@@ -22,58 +13,50 @@ jobs:
   fuzzd-scan:
     name: Tool Poisoning Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # required for SARIF upload (v0.8+)
 
     steps:
       - uses: actions/checkout@v4
 
-      # ── Install fuzzd ────────────────────────────────────────────────────
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      # ── Install fuzzd ──────────────────────────────────────────────────────
+      # Pre-built binaries available from v0.8: https://github.com/ksek87/fuzzd/releases
+      # Until then, install from source:
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install fuzzd
+        run: cargo install --git https://github.com/ksek87/fuzzd --locked
 
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build fuzzd
-        run: cargo build --release
-        working-directory: path/to/fuzzd  # adjust to your setup
-
-      # ── Export your server's tool definitions ────────────────────────────
-      # Replace this step with however your server exposes its tool list.
-      # The output must be JSON in MCP tools/list format.
+      # ── Export your server's tool definitions ──────────────────────────────
+      # Replace with however your server exposes its tool list.
+      # Output must be MCP tools/list format: { "tools": [...] }
       - name: Export tool definitions
         run: |
-          # Example for a Node.js MCP server:
-          # npm ci && node server.js --dump-tools > tools.json
-          #
-          # Or query a running server:
-          # npx @modelcontextprotocol/inspector stdio node server.js --list-tools > tools.json
-          #
-          # For this demo, use the example clean server:
+          # Node.js MCP server:
+          #   npm ci && node server.js --dump-tools > tools.json
+          # Python MCP server:
+          #   pip install -e . && python server.py --export-tools > tools.json
+          # Demo (replace with your actual export step):
           cp demo/servers/clean.json tools.json
 
-      # ── Run fuzzd scan ───────────────────────────────────────────────────
-      # Exit code 0 = no critical/high findings → deploy is safe.
-      # Exit code 1 = critical or high findings → block the PR.
-      - name: Scan tool descriptions for TPA patterns
-        run: ./target/release/fuzzd scan --schema tools.json
-        working-directory: path/to/fuzzd
+      # ── Scan ───────────────────────────────────────────────────────────────
+      # Exit 0 = clean. Exit 1 = critical/high findings → PR is blocked.
+      # To suppress a reviewed finding so it no longer blocks CI (v0.8+):
+      #   fuzzd suppress <tool> <signal> --reason "Reviewed by @alice 2026-05-23"
+      #   git add .fuzzd/suppress.toml && git commit -m "suppress: accept <tool>/<signal>"
+      - name: Scan for MCP tool poisoning patterns
+        run: fuzzd scan --schema tools.json
 
-      # ── Optional: fail on ANY finding (including medium/low) ─────────────
-      # Uncomment this step and remove the one above for stricter enforcement:
+      # ── Optional: upload to GitHub Code Scanning (v0.8+) ──────────────────
+      # Findings appear in the Security tab. Human dismissals persist across
+      # scans — no need to re-review the same finding after each push.
       #
-      # - name: Strict TPA scan (fail on any finding)
-      #   run: |
-      #     ./target/release/fuzzd scan --schema tools.json
-      #     if [ $? -ne 0 ]; then exit 1; fi
-      #   working-directory: path/to/fuzzd
-
-      # ── Optional: upload scan results as an artifact ─────────────────────
-      # - name: Save scan results
-      #   if: failure()
-      #   run: ./target/release/fuzzd scan --schema tools.json > scan-results.txt 2>&1 || true
+      # Uncomment when v0.8 is released:
       #
-      # - uses: actions/upload-artifact@v4
-      #   if: failure()
+      # - name: Scan and emit SARIF
+      #   run: fuzzd scan --schema tools.json --output sarif > fuzzd.sarif || true
+      #
+      # - name: Upload to GitHub Code Scanning
+      #   uses: github/codeql-action/upload-sarif@v3
       #   with:
-      #     name: fuzzd-scan-results
-      #     path: scan-results.txt
+      #     sarif_file: fuzzd.sarif
