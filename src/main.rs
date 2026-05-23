@@ -2,12 +2,10 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-mod analyzer;
 mod cli;
 mod corpus;
 mod fuzzer;
 mod protocol;
-mod reporter;
 mod runner;
 #[cfg(test)]
 mod testutil;

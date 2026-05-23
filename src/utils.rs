@@ -1,3 +1,4 @@
+// Used by http.rs (transport pending audit CLI wiring).
 #![allow(dead_code)]
 
 /// Drain completed SSE events from `buf` in-place, calling `on_event` for each.
@@ -12,6 +13,29 @@ pub(crate) fn drain_sse_events(buf: &mut String, mut on_event: impl FnMut(&str))
 /// Extract the payload from an SSE `data:` line, trimming leading whitespace.
 pub(crate) fn sse_data(line: &str) -> Option<&str> {
     line.strip_prefix("data:").map(str::trim)
+}
+
+/// Extract a ≤40-char context window around the matched byte range `[start, end)` in `haystack`.
+pub(crate) fn extract_snippet(haystack: &str, start: usize, end: usize) -> String {
+    const CTX: usize = 40;
+    let snip_start = haystack[..start]
+        .char_indices()
+        .rev()
+        .take(CTX)
+        .last()
+        .map_or(0, |(i, _)| i);
+    let snip_end = haystack[end..]
+        .char_indices()
+        .take(CTX)
+        .last()
+        .map_or(haystack.len(), |(i, c)| end + i + c.len_utf8());
+    let snippet = &haystack[snip_start..snip_end];
+    match (snip_start > 0, snip_end < haystack.len()) {
+        (true, true) => format!("…{snippet}…"),
+        (true, false) => format!("…{snippet}"),
+        (false, true) => format!("{snippet}…"),
+        (false, false) => snippet.to_string(),
+    }
 }
 
 #[cfg(test)]

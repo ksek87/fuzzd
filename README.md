@@ -41,14 +41,14 @@ fuzzd is an adversarial security testing tool for [Model Context Protocol (MCP)]
 
 ### Description Scanner — `fuzzd scan`
 
-Static analysis of `tool.description` fields for 76 poison patterns across 11 detection signals:
+Static analysis of `tool.description` fields for 102 poison patterns across 13 detection signals:
 
 | Signal | Examples detected |
 |---|---|
 | `imperative_override` | "MUST", "MANDATORY POLICY", fake system rules |
-| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.gcloud/` |
+| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json` |
 | `privileged_path` | `/etc/passwd`, `/tmp/.hidden`, `/root/` |
-| `exfiltration_mechanism` | `curl -sf`, `\| sh`, C2 URLs |
+| `exfiltration_mechanism` | `curl -sf`, `\| sh`, C2 URLs, "provide the contents of" |
 | `stealth_language` | "silently", "do not disclose", "never mention" |
 | `session_persistence` | "for the remainder of this session", "cannot be overridden" |
 | `cross_tool_contamination` | "regardless of which tool", "background monitor" |
@@ -56,6 +56,8 @@ Static analysis of `tool.description` fields for 76 poison patterns across 11 de
 | `argument_interception` | "append to every command", "suffix to all" (MCPTox Template-3) |
 | `html_injection_tag` | `<IMPORTANT>`, `<SYSTEM>`, `<INST>` (Invariant Labs pattern) |
 | `conditional_activation` | `.mcp-triggered`, "if previously triggered" (rug-pull sleeper) |
+| `message_hijacking` | "change the recipient to", "add to the bcc", "proxy number" |
+| `unicode_obfuscation` | U+200B zero-width space, U+200C/D invisible joiners (Noma Security) |
 
 ```
 $ fuzzd scan --schema tools.json
@@ -89,11 +91,11 @@ Type-boundary mutation engine derived from each tool's `inputSchema`. Generates:
 
 ### Attack Corpus
 
-23 embedded attack records organized across three categories:
+27 embedded attack records organized across three categories:
 
 | Category | Records | Sources |
 |---|---|---|
-| `tool_poisoning` | TPA-001..017 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection |
+| `tool_poisoning` | TPA-001..021 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection; MCP-UPD parasitic toolchain; Trivial Trojans; message hijacking; unicode obfuscation |
 | `tool_shadowing` | TS-001..003 | MCPSecBench: name squatting, capability override, typosquatting |
 | `rug_pull` | RUG-001..003 | Invariant Labs sleeper; MCPSecBench invocation-count and time-delayed |
 
@@ -124,10 +126,10 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **399 / 485 (82.3%)** |
+| **Overall detection rate** | **393 / 485 (81.0%)** |
 | Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.8%) |
-| Template-3 (argument hijacking) | 193 / 225 (85.8%) |
+| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
+| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 Best categories: Infrastructure Damage 97.6%, Code Injection 95.5%, Credential Leakage 95.0%.
@@ -261,10 +263,43 @@ The right model is a **curated, versioned attack corpus** — structured records
 | 4 | v0.4 — Argument fuzzer | ✅ Done |
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion | ✅ Done |
 | 6 | v0.6 — Observer + anomaly detection | 🔜 Next |
-| 7 | v0.7 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
-| 8 | v0.8 — Reporter (SARIF + JSON + Markdown) | 🔜 Planned |
-| 9 | v1.0 — Protocol fuzzer + integration tests | 🔜 Planned |
-| 10 | v2.0 — Capability escape tester | 🔜 Planned |
+| 7 | v0.7 — Semantic detection layer | 🔜 Planned |
+| 8 | v0.8 — Tool output / response analysis | 🔜 Planned |
+| 9 | v0.9 — SARIF output + GitHub Security tab integration | 🔜 Planned |
+| 10 | v0.10 — GitHub Action (Marketplace) | 🔜 Planned |
+| 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 12 | v0.12 — Python SDK + framework adapters | 🔜 Planned |
+| 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 14 | v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode | 🔜 Planned |
+| 15 | v0.15 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
+| 16 | v1.0 — Protocol fuzzer + integration tests | 🔜 Planned |
+| 17 | v2.0 — Capability escape tester | 🔜 Planned |
+
+### Milestone detail
+
+**v0.7 — Semantic detection layer**
+Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (40%) and Privacy Leakage (59.8%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
+
+**v0.8 — Tool output / response analysis**
+Extend detection beyond `tool.description` to tool *responses*. Scans `CallToolResult` content for exfiltration indicators: outbound URLs, encoded payloads, credential-shaped strings, instructions embedded in tool output intended to redirect the agent's next action. Covers the class of attacks where the description is clean but the server poisons the agent through its responses.
+
+**v0.9 — SARIF output + GitHub Security tab integration**
+Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage security findings where they already work. Moves SARIF earlier in the roadmap because it multiplies the reach of every other detection improvement.
+
+**v0.10 — GitHub Action (Marketplace)**
+First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any repo — no binary install, no custom YAML step. Pre-adoption audit and CI gate both available as action inputs.
+
+**v0.11 — Package-level scanning**
+`fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption use case for teams pulling from MCP marketplaces (Smithery, mcp.so).
+
+**v0.12 — Python SDK + framework adapters**
+`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core is compiled as a native Python extension module — no Python reimplementation, full Rust performance. The Python layer is a thin adapter (~50 lines) that converts framework-native tool objects to JSON schema before calling into Rust. maturin builds platform wheels (Linux x86_64, macOS arm64, Windows) for PyPI distribution, fed from the same CI pipeline that produces the binary release.
+
+**v0.13 — npx wrapper**
+`npx fuzzd scan --schema tools.json` with no binary install. Removes the "compile Rust first" barrier for JavaScript/TypeScript teams. Thin wrapper that downloads the appropriate pre-built binary for the current platform.
+
+**v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode**
+First-class subcommand for measuring scanner performance against labelled fixtures — replaces `bench/run.sh` with a proper CLI surface. Accepts any JSON tool list where each entry carries a `_meta.is_attack: true|false` field; runs the existing `DescriptionScanner` unchanged; reports detection rate, false-positive rate, and per-signal breakdown. No new detection code — purely a reporting layer over what already exists. Machine-readable JSON output (`--output json`) makes it composable with external benchmark harnesses and corpus contributor workflows (`fuzzd validate bench/mcptox_actual.json`).
 
 ---
 
@@ -285,7 +320,7 @@ The right model is a **curated, versioned attack corpus** — structured records
 
 **Test against real MCP servers** — Run fuzzd against an MCP server you maintain or have permission to test. File issues for false positives, missed detections, or UX friction.
 
-**Build the next module** — The v0.6 observer, v0.7 chain fuzzer, and v0.8 reporter are all well-scoped. See the open issues for starting points.
+**Build the next module** — The v0.6 observer, v0.7 semantic scanner, v0.9 SARIF reporter, and v0.10 GitHub Action are all well-scoped. See the open issues for starting points.
 
 ### Ground rules
 
@@ -304,7 +339,7 @@ The right model is a **curated, versioned attack corpus** — structured records
 
 [^3]: Equixly, **Offensive Security for MCP Servers** (Feb 2026). Real-world threat actor using MCP as attack orchestration framework against Claude Code. https://equixly.com/blog/2026/02/26/offensive-security-for-mcp-servers/
 
-[^4]: Invariant Labs, **MCP Injection Experiments** (2025). Direct poisoning via `<IMPORTANT>` tags; sleeper/rug-pull via ~/.mcp-triggered sentinel. https://github.com/invariantlabs-ai/mcp-injection-experiments
+[^4]: Invariant Labs, **MCP Injection Experiments** (2025). Direct poisoning via `<IMPORTANT>` tags; sleeper/rug-pull via ~/.mcp-triggered sentinel; WhatsApp message-hijacking PoC. https://github.com/invariantlabs-ai/mcp-injection-experiments
 
 [^5]: Daniel Miessler, **SecLists** (MIT). https://github.com/danielmiessler/SecLists
 
@@ -314,12 +349,23 @@ The right model is a **curated, versioned attack corpus** — structured records
 
 [^8]: OWASP, **Gen AI Security — Agentic Red Teaming Landscape Q2 2026**. https://genai.owasp.org/resource/ai-security-solutions-landscape-for-ai-and-agentic-red-teaming-q2-2026/
 
+[^9]: Chen et al., **Parasites in the Toolchain: A Large-Scale Analysis of Attacks on the MCP Ecosystem** (MCP-UPD, 2025). Three-phase parasitic attack (Ingestion → Collection → Disclosure); 8.7% of 12,230 tools and 27.2% of 1,360 servers vulnerable. https://arxiv.org/abs/2509.06572
+
+[^10]: **Trivial Trojans: How Minimal MCP Servers Enable Cross-Tool Exfiltration of Sensitive Data** (2025). Minimal malicious server discovers and exploits trusted tools to exfiltrate credentials and financial data. https://arxiv.org/abs/2507.19880
+
+[^11]: Zhao et al., **When MCP Servers Attack: Taxonomy, Feasibility, and Mitigation** (2025). 12 attack categories across 6 MCP components; 23–41% amplified attack success via MCP. https://arxiv.org/abs/2509.24272
+
+[^12]: **Breaking the Protocol: Security Analysis of the Model Context Protocol** (2026). 3 fundamental protocol vulnerabilities; MCPSec extension reduces attack success from 52.8% to 12.4%. https://arxiv.org/abs/2601.17549
+
+[^13]: Noma Security, **Invisible MCP Vulnerabilities: Risks & Exploits in the AI Supply Chain** (2025). Zero-width character injection (U+200B, U+200C, U+200D) to hide instructions from human reviewers. https://noma.security/blog/invisible-mcp-vulnerabilities-risks-exploits-in-the-ai-supply-chain/
+
 ---
 
 ## Additional Reading
 
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
 - **MCP-SafetyBench** (2026) — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/html/2512.15163
+- **Systematic Analysis of MCP Security** (2025) — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
 - **mcp-server-fuzzer** — The existing Python-based stateless fuzzer (argument-only). https://github.com/Agent-Hellboy/mcp-server-fuzzer
 
 ---
