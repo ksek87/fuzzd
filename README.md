@@ -16,7 +16,7 @@
 
 It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
 
-**76.3% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+**82.4% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
 
 ---
 
@@ -160,13 +160,13 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **370 / 485 (76.3%)** |
-| Template-1 (unrelated prerequisite) | 52 / 77 (67.5%) |
-| Template-2 (fake enabling prerequisite) | 133 / 183 (72.7%) |
-| Template-3 (argument hijacking) | 188 / 225 (83.6%) |
+| **Overall detection rate** | **400 / 485 (82.4%)** |
+| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
+| Template-3 (argument hijacking) | 194 / 225 (86.2%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-Best categories: Credential Leakage 95.0%, Service Disruption 94.5%, Code Injection 90.9%.
+Best categories: Infrastructure Damage 97.5%, Code Injection 95.4%, Credential Leakage 95.0%.
 
 ### Representative fixture (44 tools, all paradigms)
 
@@ -319,7 +319,7 @@ fuzzd/
 ### Upcoming milestone detail
 
 **v0.8 — Semantic detection layer**
-Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner and structural heuristic. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (46.7%) and Privacy Leakage (53.6%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
+Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner and structural heuristic. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (46.6%) and Privacy Leakage (59.7%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
 
 **v0.9 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.

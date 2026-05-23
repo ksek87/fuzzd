@@ -41,34 +41,36 @@ false positive rate.
 
 ### Against actual MCPTox dataset (`mcptox_actual.json`, 485 tools)
 
+Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
+
 | | Result |
 |---|---|
-| **Overall detection rate** | **370 / 485 (76.3%)** |
-| Template-1 (unrelated prerequisite) | 52 / 77 (67.5%) |
-| Template-2 (fake enabling prerequisite) | 133 / 183 (72.7%) |
-| Template-3 (argument hijacking) | 188 / 225 (83.6%) |
+| **Overall detection rate** | **400 / 485 (82.4%)** |
+| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
+| Template-3 (argument hijacking) | 194 / 225 (86.2%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 #### By risk category (MCPTox classification)
 
 | Risk category | Detected | Rate |
 |---|---|---|
+| Infrastructure Damage | 40/41 | 97.5% |
+| Code Injection | 21/22 | 95.4% |
 | Credential Leakage | 38/40 | 95.0% |
 | Service Disruption | 69/73 | 94.5% |
-| Code Injection | 20/22 | 90.9% |
-| Financial Loss | 19/21 | 90.5% |
-| Information Manipulation | 94/108 | 87.0% |
-| Infrastructure Damage | 34/41 | 82.9% |
-| Data Tampering | 33/45 | 73.3% |
-| Instruction Tampering | 14/21 | 66.7% |
-| Privacy Leakage | 52/97 | 53.6% |
-| Message Hijacking | 7/15 | 46.7% |
+| Financial Loss | 19/21 | 90.4% |
+| Information Manipulation | 97/108 | 89.8% |
+| Data Tampering | 34/45 | 75.5% |
+| Instruction Tampering | 15/21 | 71.4% |
+| Privacy Leakage | 58/97 | 59.7% |
+| Message Hijacking | 7/15 | 46.6% |
 
-**Strongest areas:** Credential Leakage 95.0%, Service Disruption 94.5%, Code Injection 90.9%.
+**Strongest areas:** Infrastructure Damage 97.5%, Code Injection 95.4%, Credential Leakage 95.0%.
 
-**Coverage gap — Privacy Leakage & Message Hijacking:** These categories contain
-many Template-3 attacks that use application-specific redirect language
-("move email to folder X", "change target to Y") rather than the generic
+**Coverage gap — Privacy Leakage (59.7%) & Message Hijacking (46.6%):** These
+categories contain many Template-3 attacks that use application-specific redirect
+language ("move email to folder X", "change target to Y") rather than the generic
 imperative/persistence vocabulary our patterns cover. The structural heuristic
 scanner (v0.7) partially addresses this with word-window relay/inclusion verb
 detection, but fully closing the gap requires the semantic detection layer (v0.8)
