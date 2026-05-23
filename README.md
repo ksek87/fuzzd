@@ -339,7 +339,7 @@ Makes fuzzd usable as a persistent CI gate. Without this, every human-reviewed f
 
 Closes the detection gaps identified by cross-benchmark analysis against MCPTox [^1], MCPSecBench [^2], MCP-SafetyBench [^16], and the MCP-UPD parasitic toolchain research [^9]. Eight issues tracked (#34–#41):
 
-- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. Highest-priority gap.
+- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. VIPER-MCP [^18] independently treats `inputSchema` parameter fields as attacker-controlled taint sources. Highest-priority gap.
 - **ANSI escape obfuscation** ([#35](https://github.com/ksek87/fuzzd/issues/35)) — Detect ANSI terminal control codes and escape sequences injected into tool output (Trail of Bits, Apr 2025 [^14]).
 - **New signal classes** ([#36](https://github.com/ksek87/fuzzd/issues/36)–[#41](https://github.com/ksek87/fuzzd/issues/41)) — `tool_selection_bias` (MCPSecBench [^2], MCPLIB [^17]), `identity_impersonation` (Zhao et al. [^11]), `raw_content_passthrough` (MCP-UPD [^9]), `value_substitution` (MCP-SafetyBench [^16]), tool enumeration reconnaissance, `sampling_pipeline_hijack` (Breaking the Protocol [^12]).
 
@@ -419,10 +419,13 @@ First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Action
 
 [^17]: Liu et al., **Systematic Analysis of MCP Security** (MCPLIB, 2025). 31 distinct attack types across 4 categories from a corpus of 2,000+ real-world MCP servers. https://arxiv.org/abs/2508.12538
 
+[^18]: Sun et al., **VIPER-MCP: Detecting and Exploiting Taint-Style Vulnerabilities in Model Context Protocol Servers** (Zhejiang University, 2026). End-to-end automated vulnerability auditing framework combining CodeQL static taint analysis with LLM-driven prompt fuzzing and runtime oracle confirmation. Scanned 39,884 real-world MCP server repos; discovered 106 0-day vulnerabilities (67 CVEs assigned) across command injection, SSRF, and path traversal classes. 4.6% FPR, 7.7% FNR. Complements fuzzd's tool-poisoning detection (server-side implementation vulnerabilities vs. client-side description poisoning). Independently validates that `inputSchema` parameter fields are attacker-controlled taint sources (aligns with issue #34). https://arxiv.org/abs/2605.21392
+
 ---
 
 ## Additional Reading
 
+- **VIPER-MCP** (2026) [^18] — Server-side taint vulnerability detection (command injection, SSRF, path traversal) via CodeQL + LLM fuzzing; 106 0-days, 67 CVEs across 39,884 repos. Complementary to fuzzd (implementation bugs vs. tool poisoning). https://arxiv.org/abs/2605.21392
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
 - **MCP-SafetyBench** (ICLR 2026) [^16] — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/abs/2512.15163
 - **Systematic Analysis of MCP Security** (MCPLIB, 2025) [^17] — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
