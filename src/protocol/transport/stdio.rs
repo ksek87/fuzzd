@@ -1,6 +1,3 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 use std::process::Stdio;
 use std::sync::Arc;
 

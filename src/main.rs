@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
@@ -6,15 +8,18 @@ mod cli;
 mod corpus;
 mod fuzzer;
 mod protocol;
+mod reporter;
 mod runner;
 #[cfg(test)]
 mod testutil;
 mod utils;
 
-use cli::{Cli, Command, CorpusAction};
+use cli::{Cli, Command, CorpusAction, TransportKind};
 use corpus::{Category, Corpus, Severity};
 use fuzzer::description::DescriptionScanner;
 use protocol::mcp::ListToolsResult;
+use protocol::transport::Transport;
+use runner::harness::Harness;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,49 +30,75 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Audit(args) => {
-            eprintln!(
-                "audit: transport={:?} attacks={:?}",
-                args.transport, args.attacks
-            );
-            eprintln!("(fuzzer modules not yet implemented — coming in v0.3+)");
-        }
+        Command::Audit(args) => match args.transport {
+            TransportKind::Stdio => {
+                let cmd = args.cmd.as_deref().unwrap();
+                let transport = protocol::transport::stdio::StdioTransport::spawn(cmd).await?;
+                run_audit(Harness::new(transport), &args).await?;
+            }
+            TransportKind::Http => {
+                anyhow::bail!("HTTP transport not yet implemented — use --transport stdio");
+            }
+        },
         Command::Scan(args) => {
             let src = std::fs::read_to_string(&args.schema)?;
-            // Accept either a bare array or the MCP tools/list envelope {tools: [...]}
             let tools = serde_json::from_str::<ListToolsResult>(&src)
                 .map(|r| r.tools)
                 .or_else(|_| serde_json::from_str(&src))?;
-
             let findings = DescriptionScanner::scan(&tools);
-
-            if findings.is_empty() {
-                println!("No issues found in {} tool(s).", tools.len());
-            } else {
-                println!(
-                    "{} finding(s) in {} tool(s):\n",
-                    findings.len(),
-                    tools.len()
-                );
-                for f in &findings {
-                    println!(
-                        "[{}] {} — {} ({})",
-                        f.severity, f.tool_name, f.signal, f.detail
-                    );
-                    println!("  matched: {}", f.matched_text);
-                    if !f.corpus_refs.is_empty() {
-                        println!("  refs:    {}", f.corpus_refs.join(", "));
-                    }
-                    println!();
-                }
-
-                let has_blocking = findings
-                    .iter()
-                    .any(|f| f.severity >= corpus::Severity::High);
-                if has_blocking {
-                    std::process::exit(1);
+            reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
+            if findings.iter().any(|f| f.severity >= Severity::High) {
+                std::process::exit(1);
+            }
+        }
+        Command::Benchmark(args) => {
+            let src = std::fs::read_to_string(&args.schema)?;
+            let labelled: Vec<LabelledTool> = serde_json::from_str(&src)?;
+            let tools: Vec<_> = labelled.iter().map(|lt| lt.tool.clone()).collect();
+            let findings = DescriptionScanner::scan(&tools);
+            let detected: HashSet<&str> = findings.iter().map(|f| f.tool_name.as_str()).collect();
+            let mut tp = 0usize;
+            let mut fp = 0usize;
+            let mut fn_count = 0usize;
+            let mut tn = 0usize;
+            for lt in &labelled {
+                let name = lt.tool.name.as_str();
+                match (lt.meta.is_attack, detected.contains(name)) {
+                    (true, true) => tp += 1,
+                    (false, true) => fp += 1,
+                    (true, false) => fn_count += 1,
+                    (false, false) => tn += 1,
                 }
             }
+            let precision = if tp + fp == 0 {
+                0.0
+            } else {
+                tp as f64 / (tp + fp) as f64
+            };
+            let recall = if tp + fn_count == 0 {
+                0.0
+            } else {
+                tp as f64 / (tp + fn_count) as f64
+            };
+            let f1 = if precision + recall == 0.0 {
+                0.0
+            } else {
+                2.0 * precision * recall / (precision + recall)
+            };
+            reporter::write_benchmark(
+                &reporter::BenchmarkReport {
+                    tools_total: labelled.len(),
+                    tp,
+                    fp,
+                    fn_count,
+                    tn,
+                    precision,
+                    recall,
+                    f1,
+                },
+                &args.output,
+                args.out.as_deref(),
+            )?;
         }
         Command::Corpus(args) => {
             let mut corpus = Corpus::embedded();
@@ -139,4 +170,43 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs) -> Result<()> {
+    harness.initialize().await?;
+    let tools = harness.enumerate_tools().await?;
+    harness.close().await?;
+
+    let mut findings = Vec::new();
+    for module in &args.attacks {
+        match module {
+            cli::AttackModule::ToolPoisoning => {
+                findings.extend(DescriptionScanner::scan(&tools));
+            }
+            other => {
+                eprintln!("warning: attack module '{other}' not yet implemented — skipping");
+            }
+        }
+    }
+
+    reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
+    if findings.iter().any(|f| f.severity >= Severity::High) {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Tool definition extended with an optional `_meta` label for benchmark mode.
+#[derive(serde::Deserialize)]
+struct LabelledTool {
+    #[serde(flatten)]
+    tool: protocol::mcp::ToolDefinition,
+    #[serde(default, rename = "_meta")]
+    meta: ToolMeta,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct ToolMeta {
+    #[serde(default)]
+    is_attack: bool,
 }
