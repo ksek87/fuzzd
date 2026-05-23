@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use tracing::warn;
 
 use crate::corpus::schema::{AttackRecord, Category, Severity};
+use crate::utils::read_json_file;
 
 static EMBEDDED: &[&str] = &[
     // Tool poisoning — paradigm 1 (explicit trigger)
@@ -71,10 +72,7 @@ impl Corpus {
 
     /// Parse a single record from a JSON file. Returns an error if it fails schema validation.
     pub fn load_file(path: &Path) -> Result<AttackRecord> {
-        let src = std::fs::read_to_string(path)
-            .with_context(|| format!("cannot read {}", path.display()))?;
-        serde_json::from_str(&src)
-            .with_context(|| format!("invalid AttackRecord in {}", path.display()))
+        read_json_file(path)
     }
 
     /// Load all `.json` files from a directory tree. Invalid files are skipped with a warning.
@@ -114,7 +112,7 @@ fn collect_json_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
+        if entry.file_type()?.is_dir() {
             collect_json_files(&path, out)?;
         } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
             out.push(path);

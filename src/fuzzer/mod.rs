@@ -95,12 +95,20 @@ pub struct Finding {
 // ── Shared scanner infrastructure ─────────────────────────────────────────────
 
 /// Pattern used by both the description and response scanners.
-struct Pattern {
+pub(super) struct Pattern {
     needle: &'static str,
     signal: Signal,
     severity: Severity,
     detail: &'static str,
     corpus_refs: &'static [&'static str],
+}
+
+/// Build an Aho-Corasick automaton for `patterns` with ASCII case-insensitive matching.
+pub(super) fn build_automaton(patterns: &'static [Pattern]) -> AhoCorasick {
+    AhoCorasick::builder()
+        .ascii_case_insensitive(true)
+        .build(patterns.iter().map(|p| p.needle))
+        .expect("valid pattern needles")
 }
 
 /// Single-pass scan of `text` against `automaton`/`patterns`.

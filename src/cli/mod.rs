@@ -137,7 +137,7 @@ pub enum TransportKind {
     Http,
 }
 
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 #[value(rename_all = "snake_case")]
 pub enum AttackModule {
     ToolPoisoning,

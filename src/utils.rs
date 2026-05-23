@@ -1,8 +1,17 @@
-// Used by http.rs (transport pending audit CLI wiring).
-#![allow(dead_code)]
+use std::path::Path;
+
+use anyhow::{Context, Result};
+
+/// Read a JSON file and deserialise it into `T`.
+pub(crate) fn read_json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+    let src =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    serde_json::from_str(&src).with_context(|| format!("invalid JSON in {}", path.display()))
+}
 
 /// Drain completed SSE events from `buf` in-place, calling `on_event` for each.
 /// An SSE event is terminated by `\n\n`. Consumed bytes are removed from `buf`.
+#[allow(dead_code)]
 pub(crate) fn drain_sse_events(buf: &mut String, mut on_event: impl FnMut(&str)) {
     while let Some(pos) = buf.find("\n\n") {
         on_event(&buf[..pos]);
@@ -11,6 +20,7 @@ pub(crate) fn drain_sse_events(buf: &mut String, mut on_event: impl FnMut(&str))
 }
 
 /// Extract the payload from an SSE `data:` line, trimming leading whitespace.
+#[allow(dead_code)]
 pub(crate) fn sse_data(line: &str) -> Option<&str> {
     line.strip_prefix("data:").map(str::trim)
 }
@@ -75,5 +85,31 @@ mod tests {
         assert_eq!(sse_data("data:hello"), Some("hello"));
         assert_eq!(sse_data("event: ping"), None);
         assert_eq!(sse_data("data:  spaced  "), Some("spaced"));
+    }
+
+    #[test]
+    fn read_json_file_parses_valid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(&path, r#"{"key": "value"}"#).unwrap();
+        let val: serde_json::Value = read_json_file(&path).unwrap();
+        assert_eq!(val["key"], "value");
+    }
+
+    #[test]
+    fn read_json_file_errors_on_missing_file() {
+        let result = read_json_file::<serde_json::Value>(Path::new("/nonexistent/path.json"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot read"));
+    }
+
+    #[test]
+    fn read_json_file_errors_on_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.json");
+        std::fs::write(&path, "not json").unwrap();
+        let result = read_json_file::<serde_json::Value>(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid JSON"));
     }
 }

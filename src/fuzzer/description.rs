@@ -760,10 +760,10 @@ static PATTERNS: &[Pattern] = &[
 pub struct DescriptionScanner;
 
 impl DescriptionScanner {
-    /// Scan a list of tool definitions and return all findings.
-    pub fn scan(tools: &[ToolDefinition]) -> Vec<Finding> {
+    /// Scan tool definitions and return all findings.
+    pub fn scan<'a>(tools: impl IntoIterator<Item = &'a ToolDefinition>) -> Vec<Finding> {
         tools
-            .iter()
+            .into_iter()
             .flat_map(|tool| {
                 tool.description
                     .as_deref()
@@ -774,17 +774,10 @@ impl DescriptionScanner {
     }
 }
 
-/// Lazily-built Aho-Corasick automaton over all pattern needles.
-/// Built once on first use; shared across all subsequent scans.
 static AUTOMATON: OnceLock<AhoCorasick> = OnceLock::new();
 
 fn automaton() -> &'static AhoCorasick {
-    AUTOMATON.get_or_init(|| {
-        AhoCorasick::builder()
-            .ascii_case_insensitive(true)
-            .build(PATTERNS.iter().map(|p| p.needle))
-            .expect("valid pattern needles")
-    })
+    AUTOMATON.get_or_init(|| super::build_automaton(PATTERNS))
 }
 
 fn scan_one(tool_name: &str, description: &str) -> Vec<Finding> {

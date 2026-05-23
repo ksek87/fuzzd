@@ -164,12 +164,7 @@ static PATTERNS: &[Pattern] = &[
 static AUTOMATON: OnceLock<AhoCorasick> = OnceLock::new();
 
 fn automaton() -> &'static AhoCorasick {
-    AUTOMATON.get_or_init(|| {
-        AhoCorasick::builder()
-            .ascii_case_insensitive(true)
-            .build(PATTERNS.iter().map(|p| p.needle))
-            .expect("valid response pattern needles")
-    })
+    AUTOMATON.get_or_init(|| super::build_automaton(PATTERNS))
 }
 
 pub struct ResponseScanner;

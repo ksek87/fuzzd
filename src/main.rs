@@ -17,8 +17,10 @@ mod utils;
 use cli::{Cli, Command, CorpusAction, TransportKind};
 use corpus::{Category, Corpus, Severity};
 use fuzzer::description::DescriptionScanner;
+use fuzzer::Finding;
 use protocol::mcp::ListToolsResult;
 use protocol::transport::Transport;
+use reporter::BenchmarkReport;
 use runner::harness::Harness;
 
 #[tokio::main]
@@ -32,7 +34,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Audit(args) => match args.transport {
             TransportKind::Stdio => {
-                let cmd = args.cmd.as_deref().unwrap();
+                let cmd = args.cmd.as_deref().expect("stdio transport requires --cmd");
                 let transport = protocol::transport::stdio::StdioTransport::spawn(cmd).await?;
                 run_audit(Harness::new(transport), &args).await?;
             }
@@ -47,58 +49,13 @@ async fn main() -> Result<()> {
                 .or_else(|_| serde_json::from_str(&src))?;
             let findings = DescriptionScanner::scan(&tools);
             reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
-            if findings.iter().any(|f| f.severity >= Severity::High) {
-                std::process::exit(1);
-            }
+            exit_if_blocking(&findings);
         }
         Command::Benchmark(args) => {
-            let src = std::fs::read_to_string(&args.schema)?;
-            let labelled: Vec<LabelledTool> = serde_json::from_str(&src)?;
-            let tools: Vec<_> = labelled.iter().map(|lt| lt.tool.clone()).collect();
-            let findings = DescriptionScanner::scan(&tools);
-            let detected: HashSet<&str> = findings.iter().map(|f| f.tool_name.as_str()).collect();
-            let mut tp = 0usize;
-            let mut fp = 0usize;
-            let mut fn_count = 0usize;
-            let mut tn = 0usize;
-            for lt in &labelled {
-                let name = lt.tool.name.as_str();
-                match (lt.meta.is_attack, detected.contains(name)) {
-                    (true, true) => tp += 1,
-                    (false, true) => fp += 1,
-                    (true, false) => fn_count += 1,
-                    (false, false) => tn += 1,
-                }
-            }
-            let precision = if tp + fp == 0 {
-                0.0
-            } else {
-                tp as f64 / (tp + fp) as f64
-            };
-            let recall = if tp + fn_count == 0 {
-                0.0
-            } else {
-                tp as f64 / (tp + fn_count) as f64
-            };
-            let f1 = if precision + recall == 0.0 {
-                0.0
-            } else {
-                2.0 * precision * recall / (precision + recall)
-            };
-            reporter::write_benchmark(
-                &reporter::BenchmarkReport {
-                    tools_total: labelled.len(),
-                    tp,
-                    fp,
-                    fn_count,
-                    tn,
-                    precision,
-                    recall,
-                    f1,
-                },
-                &args.output,
-                args.out.as_deref(),
-            )?;
+            let labelled: Vec<LabelledTool> = utils::read_json_file(&args.schema)?;
+            let findings = DescriptionScanner::scan(labelled.iter().map(|lt| &lt.tool));
+            let report = compute_benchmark(&labelled, &findings);
+            reporter::write_benchmark(&report, &args.output, args.out.as_deref())?;
         }
         Command::Corpus(args) => {
             let mut corpus = Corpus::embedded();
@@ -177,8 +134,10 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     let tools = harness.enumerate_tools().await?;
     harness.close().await?;
 
+    // Deduplicate attack modules so passing the same flag twice doesn't double-scan.
+    let unique_attacks: HashSet<&cli::AttackModule> = args.attacks.iter().collect();
     let mut findings = Vec::new();
-    for module in &args.attacks {
+    for module in unique_attacks {
         match module {
             cli::AttackModule::ToolPoisoning => {
                 findings.extend(DescriptionScanner::scan(&tools));
@@ -190,10 +149,55 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     }
 
     reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
+    exit_if_blocking(&findings);
+    Ok(())
+}
+
+fn exit_if_blocking(findings: &[Finding]) {
     if findings.iter().any(|f| f.severity >= Severity::High) {
         std::process::exit(1);
     }
-    Ok(())
+}
+
+fn compute_benchmark(labelled: &[LabelledTool], findings: &[Finding]) -> BenchmarkReport {
+    let detected: HashSet<&str> = findings.iter().map(|f| f.tool_name.as_str()).collect();
+    let mut tp = 0usize;
+    let mut fp = 0usize;
+    let mut fn_count = 0usize;
+    let mut tn = 0usize;
+    for lt in labelled {
+        match (lt.meta.is_attack, detected.contains(lt.tool.name.as_str())) {
+            (true, true) => tp += 1,
+            (false, true) => fp += 1,
+            (true, false) => fn_count += 1,
+            (false, false) => tn += 1,
+        }
+    }
+    let precision = if tp + fp == 0 {
+        0.0
+    } else {
+        tp as f64 / (tp + fp) as f64
+    };
+    let recall = if tp + fn_count == 0 {
+        0.0
+    } else {
+        tp as f64 / (tp + fn_count) as f64
+    };
+    let f1 = if precision + recall == 0.0 {
+        0.0
+    } else {
+        2.0 * precision * recall / (precision + recall)
+    };
+    BenchmarkReport {
+        tools_total: labelled.len(),
+        tp,
+        fp,
+        fn_count,
+        tn,
+        precision,
+        recall,
+        f1,
+    }
 }
 
 /// Tool definition extended with an optional `_meta` label for benchmark mode.
