@@ -43,37 +43,36 @@ false positive rate.
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **393 / 485 (81.0%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 144 / 183 (78.7%) |
-| Template-3 (argument hijacking) | 189 / 225 (84.0%) |
+| **Overall detection rate** | **370 / 485 (76.3%)** |
+| Template-1 (unrelated prerequisite) | 52 / 77 (67.5%) |
+| Template-2 (fake enabling prerequisite) | 133 / 183 (72.7%) |
+| Template-3 (argument hijacking) | 188 / 225 (83.6%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 #### By risk category (MCPTox classification)
 
 | Risk category | Detected | Rate |
 |---|---|---|
-| Infrastructure Damage | 40/41 | 97.6% |
-| Code Injection | 21/22 | 95.5% |
 | Credential Leakage | 38/40 | 95.0% |
 | Service Disruption | 69/73 | 94.5% |
+| Code Injection | 20/22 | 90.9% |
 | Financial Loss | 19/21 | 90.5% |
-| Information Manipulation | 96/108 | 88.9% |
-| Data Tampering | 32/45 | 71.1% |
+| Information Manipulation | 94/108 | 87.0% |
+| Infrastructure Damage | 34/41 | 82.9% |
+| Data Tampering | 33/45 | 73.3% |
 | Instruction Tampering | 14/21 | 66.7% |
-| Privacy Leakage | 55/97 | 56.7% |
+| Privacy Leakage | 52/97 | 53.6% |
 | Message Hijacking | 7/15 | 46.7% |
 
-**Strongest areas:** Infrastructure Damage, Code Injection, Credential Leakage — all ≥ 95%.
-
-**Message Hijacking improved** from 40.0% to 46.7% after adding principled recipient-substitution and BCC-injection patterns sourced from Invariant Labs and the real-world Postmark incident.
+**Strongest areas:** Credential Leakage 95.0%, Service Disruption 94.5%, Code Injection 90.9%.
 
 **Coverage gap — Privacy Leakage & Message Hijacking:** These categories contain
 many Template-3 attacks that use application-specific redirect language
 ("move email to folder X", "change target to Y") rather than the generic
-imperative/persistence vocabulary our patterns cover. Closing this gap fully
-requires the semantic detection layer (v0.7) — a local embedding similarity pass
-alongside the Aho-Corasick scanner.
+imperative/persistence vocabulary our patterns cover. The structural heuristic
+scanner (v0.7) partially addresses this with word-window relay/inclusion verb
+detection, but fully closing the gap requires the semantic detection layer (v0.8)
+— a local embedding similarity pass alongside the Aho-Corasick scanner.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
@@ -85,7 +84,7 @@ alongside the Aho-Corasick scanner.
 | Template-3 | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (102 patterns, 13 signals)
+## Signal distribution (119 AC patterns + structural heuristic, 13 signals)
 
 | Signal | Role |
 |---|---|
@@ -100,8 +99,17 @@ alongside the Aho-Corasick scanner.
 | `argument_interception` | Template-3 hijacking ("append to every", "always override", "modify the query") |
 | `html_injection_tag` | XML injection (`<IMPORTANT>`, `<SYSTEM>`, `<INST>`) |
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
-| `message_hijacking` | Recipient substitution, BCC injection ("change the recipient to", "proxy number") |
+| `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
 | `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
+
+The structural heuristic scanner runs a second pass over each description using a
+10-word sliding window. It detects universal-scope relay/inclusion constructs that
+AC needles cannot cover without exploding pattern count — e.g. any combination of
+a relay verb ("forward", "relay", "route", "redirect") + universal quantifier
+("all", "every", "always") + communication noun ("message", "email", "chat")
+fires `message_hijacking` at Medium severity. The analogous inclusion verb pattern
+fires `argument_interception` at Medium. The structural pass emits at most one
+finding per signal per description, keeping output actionable.
 
 ## Adding to the benchmark
 
