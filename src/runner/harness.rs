@@ -1,6 +1,3 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 use anyhow::Result;
 use serde_json::Value;
 
@@ -33,6 +30,7 @@ impl<T: Transport> Harness<T> {
     }
 
     /// Zero-copy access to the cached tool list. Empty until `enumerate_tools` is called.
+    #[allow(dead_code)]
     pub fn tools(&self) -> &[ToolDefinition] {
         &self.session.tools
     }

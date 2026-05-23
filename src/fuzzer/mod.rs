@@ -4,6 +4,7 @@ pub mod payloads;
 pub mod response;
 
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 use aho_corasick::AhoCorasick;
 
@@ -95,12 +96,37 @@ pub struct Finding {
 // ── Shared scanner infrastructure ─────────────────────────────────────────────
 
 /// Pattern used by both the description and response scanners.
-struct Pattern {
+pub(super) struct Pattern {
     needle: &'static str,
     signal: Signal,
     severity: Severity,
     detail: &'static str,
     corpus_refs: &'static [&'static str],
+}
+
+/// Lazy-initialised scanner: owns its pattern slice and the Aho-Corasick automaton.
+pub(super) struct Scanner {
+    patterns: &'static [Pattern],
+    automaton: OnceLock<AhoCorasick>,
+}
+
+impl Scanner {
+    pub(super) const fn new(patterns: &'static [Pattern]) -> Self {
+        Self {
+            patterns,
+            automaton: OnceLock::new(),
+        }
+    }
+
+    pub(super) fn scan_text(&self, tool_name: &str, text: &str) -> Vec<Finding> {
+        let automaton = self.automaton.get_or_init(|| {
+            AhoCorasick::builder()
+                .ascii_case_insensitive(true)
+                .build(self.patterns.iter().map(|p| p.needle))
+                .expect("valid pattern needles")
+        });
+        scan_with_automaton(automaton, self.patterns, tool_name, text)
+    }
 }
 
 /// Single-pass scan of `text` against `automaton`/`patterns`.

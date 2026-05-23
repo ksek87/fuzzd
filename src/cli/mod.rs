@@ -21,6 +21,9 @@ pub enum Command {
     /// Statically analyze tool descriptions without a live server.
     Scan(ScanArgs),
 
+    /// Measure detection precision/recall against labelled fixtures.
+    Benchmark(BenchmarkArgs),
+
     /// Manage the attack corpus.
     Corpus(CorpusArgs),
 }
@@ -60,6 +63,23 @@ pub struct AuditArgs {
 #[derive(Debug, clap::Args)]
 pub struct ScanArgs {
     /// Path to a JSON file containing tool definitions (MCP tools/list format).
+    #[arg(long)]
+    pub schema: PathBuf,
+
+    /// Output format.
+    #[arg(long, default_value = "markdown")]
+    pub output: OutputFormat,
+
+    /// Write output to file (default: stdout).
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+}
+
+// ── benchmark ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, clap::Args)]
+pub struct BenchmarkArgs {
+    /// Path to a labelled fixture JSON file (tool definitions with optional _meta.is_attack field).
     #[arg(long)]
     pub schema: PathBuf,
 
@@ -117,7 +137,7 @@ pub enum TransportKind {
     Http,
 }
 
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 #[value(rename_all = "snake_case")]
 pub enum AttackModule {
     ToolPoisoning,
@@ -296,5 +316,35 @@ mod tests {
     #[test]
     fn attack_module_all_has_five_entries() {
         assert_eq!(AttackModule::all().len(), 5);
+    }
+
+    #[test]
+    fn benchmark_parses() {
+        let cli =
+            Cli::try_parse_from(["fuzzd", "benchmark", "--schema", "/tmp/fixtures.json"]).unwrap();
+        match cli.command {
+            Command::Benchmark(args) => {
+                assert_eq!(args.schema, PathBuf::from("/tmp/fixtures.json"));
+                assert_eq!(args.output, OutputFormat::Markdown);
+            }
+            _ => panic!("expected benchmark"),
+        }
+    }
+
+    #[test]
+    fn benchmark_sarif_output_parses() {
+        let cli = Cli::try_parse_from([
+            "fuzzd",
+            "benchmark",
+            "--schema",
+            "/tmp/fixtures.json",
+            "--output",
+            "sarif",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Benchmark(args) => assert_eq!(args.output, OutputFormat::Sarif),
+            _ => panic!("expected benchmark"),
+        }
     }
 }

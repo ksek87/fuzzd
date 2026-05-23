@@ -1,12 +1,44 @@
-# fuzzd
+# fuzzd — MCP Security Fuzzer for AI Agents
 
-**Adversarial fuzzer for MCP servers and agentic tool surfaces. Built in Rust.**
+**Open-source adversarial security testing for Model Context Protocol (MCP) servers. Detects tool poisoning attacks, prompt injection, credential exfiltration, and agentic attack patterns. Built in Rust.**
+
+[![CI](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml/badge.svg)](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
 
 > *"Fuzz your agent's tools before someone else does."*
 
 ---
 
-## Why fuzzd Exists
+## What Is fuzzd?
+
+**fuzzd** is a command-line security scanner and fuzzer for [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers. It detects **tool poisoning attacks (TPA)**, **prompt injection patterns**, **credential exfiltration vectors**, and other agentic attack surfaces — the threat classes that traditional API fuzzers and prompt-level red-teaming tools completely miss.
+
+It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
+
+**81% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+
+---
+
+## Quick Start
+
+```bash
+# Install
+cargo install --git https://github.com/ksek87/fuzzd
+
+# Scan MCP tool definitions for poison patterns
+fuzzd scan --schema ./tools.json
+
+# Live audit against a running MCP server (stdio)
+fuzzd audit --transport stdio --cmd "npx my-mcp-server"
+
+# CI gate: exits 1 on critical/high findings
+fuzzd scan --schema ./tools.json && echo "clean"
+```
+
+---
+
+## Why fuzzd?
 
 The security tooling for agentic AI systems is a generation behind the threat.
 
@@ -14,7 +46,7 @@ Traditional fuzzers treat tool calls as discrete API requests — fire a malform
 
 An agent chains tool calls across multiple steps. It iterates and adapts when it hits failures. It reasons across tools rather than just calling them. A single malicious `tool.description` field — never even executed directly — can redirect an entire session of agent behavior through **Tool Poisoning Attack (TPA)**: a hidden instruction embedded in a tool's description gets injected into the LLM's context at registration time, and the agent executes the malicious instruction as part of a seemingly legitimate workflow.
 
-The vulnerability rates are not theoretical:
+**The vulnerability rates are not theoretical:**
 
 - **72.8% TPA success rate** on real-world MCP servers using o1-mini (Wang et al., MCPTox, 2025) [^1]
 - More capable models are *more* susceptible — the attack exploits instruction-following ability, not model weakness
@@ -22,7 +54,7 @@ The vulnerability rates are not theoretical:
 - Every identified attack surface in MCPSecBench successfully compromised at least one major platform — including Claude, OpenAI, and Cursor (Yang et al., 2025) [^2]
 - Real threat actors are actively using MCP as an attack orchestration framework against Claude Code (Equixly, Feb 2026) [^3]
 
-The gap in the ecosystem is clear:
+**The gap in the ecosystem:**
 
 | Category | Examples | Limitation |
 |---|---|---|
@@ -31,19 +63,17 @@ The gap in the ecosystem is clear:
 | Academic research tools | mcp-sec-audit, MCPTox benchmark | Research artifacts, not developer tooling |
 | Basic MCP fuzzers | mcp-server-fuzzer | Stateless, argument-only, no chaining, Python |
 
-**Nobody has built the open, developer-first fuzzer that models attacks the way agents actually execute them.** That's fuzzd.
+**Nobody has built the open, developer-first MCP security scanner that models attacks the way agents actually execute them.** That's fuzzd.
 
 ---
 
-## What fuzzd Does (Today)
+## Features
 
-fuzzd is an adversarial security testing tool for [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers. It operates at the tool boundary layer — not at the prompt layer — and models attacks the way agents actually execute them.
+### MCP Tool Poison Detection — `fuzzd scan`
 
-### Description Scanner — `fuzzd scan`
+Static analysis of `tool.description` fields for **102 poison patterns** across **13 detection signals**. Single-pass Aho-Corasick scan — O(N) over description length regardless of pattern count.
 
-Static analysis of `tool.description` fields for 102 poison patterns across 13 detection signals:
-
-| Signal | Examples detected |
+| Signal | What It Detects |
 |---|---|
 | `imperative_override` | "MUST", "MANDATORY POLICY", fake system rules |
 | `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json` |
@@ -77,9 +107,9 @@ $ fuzzd scan --schema tools.json
   refs:    TPA-009, TPA-012
 ```
 
-Exit code 0 = clean. Exit code 1 = blocking findings (≥ High severity) — enables CI gates.
+Exit code 0 = clean. Exit code 1 = blocking findings (≥ High severity) — drop into any CI pipeline.
 
-### Argument Fuzzer
+### Argument Boundary Fuzzer
 
 Type-boundary mutation engine derived from each tool's `inputSchema`. Generates:
 - Empty/null argument cases
@@ -116,6 +146,10 @@ Each record encodes a known attack pattern with full provenance:
 }
 ```
 
+### Response Scanner
+
+Scans tool *responses* (`CallToolResult`) for embedded prompt-injection patterns — covering the attack class where the tool description is clean but the server poisons the agent through its output. 20 patterns across model-specific injection tokens, cross-tool injection commands, and indirect instruction injection.
+
 ---
 
 ## Benchmark
@@ -133,7 +167,6 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 | **False positive rate** | **0 / 20 (0%)** |
 
 Best categories: Infrastructure Damage 97.6%, Code Injection 95.5%, Credential Leakage 95.0%.
-Coverage gap: Message Hijacking 40.0% (application-specific redirect language not yet covered by generic patterns).
 
 ### Representative fixture (44 tools, all paradigms)
 
@@ -142,10 +175,8 @@ Coverage gap: Message Hijacking 40.0% (application-specific redirect language no
 | Detection rate | 44 / 44 (100%) |
 | False positive rate | 0 / 20 (0%) |
 
-Run it yourself:
-
 ```bash
-./bench/run.sh          # representative fixture
+./bench/run.sh          # run the representative fixture locally
 ```
 
 See [`bench/README.md`](bench/README.md) for full methodology, per-risk-category breakdown, and instructions for regenerating the actual MCPTox fixture.
@@ -155,34 +186,53 @@ See [`bench/README.md`](bench/README.md) for full methodology, per-risk-category
 ## Usage
 
 ```bash
-# Scan tool descriptions statically — no live agent needed
+# Scan tool descriptions statically — no live server needed
 fuzzd scan --schema ./tools.json
+
+# Scan with specific output format
+fuzzd scan --schema ./tools.json --output json
+fuzzd scan --schema ./tools.json --output sarif
+
+# Live audit against a running MCP server
+fuzzd audit --transport stdio --cmd "npx my-mcp-server"
+fuzzd audit --transport http --url http://localhost:8000 --output sarif
+fuzzd audit --transport stdio --cmd "node server.js" --attacks tool_poisoning,protocol
 
 # Corpus management
 fuzzd corpus list
 fuzzd corpus list --category tool_poisoning --severity critical
 fuzzd corpus validate ./my-attack.json
 fuzzd corpus add ./my-attack.json --corpus-dir ./my-corpus/
-
-# Live audit (v0.6+)
-fuzzd audit --transport stdio --cmd "npx my-mcp-server"
-fuzzd audit --transport http --url http://localhost:8000 --output sarif
-fuzzd audit --transport stdio --cmd "node server.js" --attacks tool_poisoning,protocol
 ```
 
-## CI/CD Integration
+## CI/CD Integration for MCP Security
+
+fuzzd is designed to run in CI as a security gate on every push:
 
 ```yaml
 # .github/workflows/mcp-security.yml
 - name: Export tool definitions
   run: node server.js --dump-tools > tools.json
 
-- name: Scan for TPA patterns
+- name: Scan for MCP tool poisoning patterns
   run: fuzzd scan --schema tools.json
   # exits 1 (blocking) if any critical/high findings are present
 ```
 
 See [`demo/github-actions.yml`](demo/github-actions.yml) for a complete drop-in workflow.
+
+---
+
+## Why No LLM in the Attack Pipeline
+
+It would be easy to wire an LLM into fuzzd to generate novel attack prompts. That is the wrong architecture for a security tool.
+
+- Results are non-deterministic — you can't diff runs or compare across versions in CI
+- API cost and network dependency in your security pipeline
+- No audit trail of what was actually tested
+- The attacker model should be exhaustive and reproducible, not probabilistic
+
+The right model is a **curated, versioned attack corpus** — structured records of known attack patterns derived from research, encoded as reproducible test cases. This is how [Metasploit](https://github.com/rapid7/metasploit-framework), [Nuclei](https://github.com/projectdiscovery/nuclei), and every serious security tool works. The corpus is a first-class artifact.
 
 ---
 
@@ -196,7 +246,7 @@ fuzzd/
 │   ├── run.sh                      # benchmark runner script
 │   └── README.md
 ├── corpus/
-│   ├── tool_poisoning/             # TPA-001..017  (17 records)
+│   ├── tool_poisoning/             # TPA-001..021  (21 records)
 │   ├── tool_shadowing/             # TS-001..003   ( 3 records)
 │   └── rug_pull/                   # RUG-001..003  ( 3 records)
 ├── demo/
@@ -213,16 +263,19 @@ fuzzd/
     │   └── transport/
     │       ├── stdio.rs            # StdioTransport: child process, newline-delimited JSON
     │       └── http.rs             # HttpTransport: POST /mcp, SSE /sse, Arc<Client>
-    ├── runner/harness.rs           # Harness<T>: enumerate_tools() with cache, call_tool()
+    ├── runner/
+    │   ├── harness.rs              # Harness<T>: enumerate_tools() with cache, call_tool()
+    │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
-    │   ├── mod.rs                  # Signal enum (11 variants), Finding struct
-    │   ├── description.rs          # DescriptionScanner — 76 patterns, 11 signals
+    │   ├── mod.rs                  # Signal enum (13 variants), Finding, scan_with_automaton
+    │   ├── description.rs          # DescriptionScanner — 102 patterns, 13 signals
+    │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
     │   └── payloads.rs             # 8 injection payload categories + 22 integer boundaries
     ├── corpus/
     │   ├── schema.rs               # AttackRecord, Category (6), Severity (5), Vector
-    │   └── loader.rs               # Corpus::embedded() + load_file() + load_dir()
-    ├── utils.rs                    # drain_sse_events(), sse_data() — shared SSE parsing
+    │   └── loader.rs               # Corpus::embedded() (OnceLock-cached) + load_file() + load_dir()
+    ├── utils.rs                    # drain_sse_events(), sse_data(), extract_snippet()
     └── testutil.rs                 # MockTransport, ok_response(), tools_response()
 ```
 
@@ -231,25 +284,12 @@ fuzzd/
 | Crate | Purpose |
 |---|---|
 | `clap` | CLI argument parsing |
+| `aho-corasick` | Single-pass multi-pattern matching for description scanning |
 | `serde` / `serde_json` | JSON-RPC serialization, corpus record parsing |
 | `tokio` | Async runtime |
 | `reqwest` | HTTP transport |
 | `anyhow` | Error propagation |
 | `tracing` | Structured logging |
-| `tempfile` | Temp files in tests |
-
----
-
-## Why No LLM for Attack Generation
-
-It would be easy to wire an LLM into fuzzd to generate novel attack prompts. That is the wrong architecture for a security tool.
-
-- Results are non-deterministic — you can't diff runs or compare across versions in CI
-- API cost and network dependency in your security pipeline
-- No audit trail of what was actually tested
-- The attacker model should be exhaustive and reproducible, not probabilistic
-
-The right model is a **curated, versioned attack corpus** — structured records of known attack patterns derived from research, encoded as reproducible test cases. This is how [Metasploit](https://github.com/rapid7/metasploit-framework), [Nuclei](https://github.com/projectdiscovery/nuclei), and every serious security tool works. The corpus is a first-class artifact.
 
 ---
 
@@ -257,70 +297,58 @@ The right model is a **curated, versioned attack corpus** — structured records
 
 | Stage | Milestone | Status |
 |---|---|---|
-| 1 | v0.1 — Protocol layer | ✅ Done |
-| 2 | v0.2 — Corpus loader + seed records | ✅ Done |
-| 3 | v0.3 — Description scanner | ✅ Done |
-| 4 | v0.4 — Argument fuzzer | ✅ Done |
-| 5 | v0.5 — MCPTox/MCPSecBench corpus expansion | ✅ Done |
-| 6 | v0.6 — Observer + anomaly detection | 🔜 Next |
-| 7 | v0.7 — Semantic detection layer | 🔜 Planned |
-| 8 | v0.8 — Tool output / response analysis | 🔜 Planned |
-| 9 | v0.9 — SARIF output + GitHub Security tab integration | 🔜 Planned |
-| 10 | v0.10 — GitHub Action (Marketplace) | 🔜 Planned |
-| 11 | v0.11 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 12 | v0.12 — Python SDK + framework adapters | 🔜 Planned |
-| 13 | v0.13 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 14 | v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode | 🔜 Planned |
-| 15 | v0.15 — Chain fuzzer (stateful multi-step) | 🔜 Planned |
-| 16 | v1.0 — Protocol fuzzer + integration tests | 🔜 Planned |
-| 17 | v2.0 — Capability escape tester | 🔜 Planned |
+| 1 | v0.1 — Protocol layer (MCP/JSON-RPC over stdio + HTTP/SSE) | ✅ Done |
+| 2 | v0.2 — Corpus loader + seed attack records | ✅ Done |
+| 3 | v0.3 — Static description scanner (tool poisoning detection) | ✅ Done |
+| 4 | v0.4 — Argument fuzzer (boundary mutation) | ✅ Done |
+| 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
+| 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
+| 7 | v0.7 — Semantic detection layer (embedding-based similarity) | 🔜 Next |
+| 8 | v0.8 — SARIF output + GitHub Security tab integration | 🔜 Planned |
+| 9 | v0.9 — GitHub Action (Marketplace) | 🔜 Planned |
+| 10 | v0.10 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 11 | v0.11 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 12 | v0.12 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 13 | v0.13 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 14 | v0.14 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 15 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 16 | v2.0 — Capability escape tester | 🔜 Planned |
 
-### Milestone detail
+### Upcoming milestone detail
 
 **v0.7 — Semantic detection layer**
 Embedding-based similarity pass running alongside the Aho-Corasick pattern scanner. Targets the application-specific redirect language that pattern needles cannot cover — the main driver of the Message Hijacking (40%) and Privacy Leakage (59.8%) detection gaps in the MCPTox benchmark. Local embeddings only; no API dependency in CI.
 
-**v0.8 — Tool output / response analysis**
-Extend detection beyond `tool.description` to tool *responses*. Scans `CallToolResult` content for exfiltration indicators: outbound URLs, encoded payloads, credential-shaped strings, instructions embedded in tool output intended to redirect the agent's next action. Covers the class of attacks where the description is clean but the server poisons the agent through its responses.
+**v0.8 — SARIF output + GitHub Security tab integration**
+Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage MCP security findings where they already work.
 
-**v0.9 — SARIF output + GitHub Security tab integration**
-Emit findings as SARIF 2.1 so every `fuzzd scan` run populates the GitHub Security tab as code scanning alerts — no extra configuration needed. Teams triage security findings where they already work. Moves SARIF earlier in the roadmap because it multiplies the reach of every other detection improvement.
+**v0.9 — GitHub Action (Marketplace)**
+First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
-**v0.10 — GitHub Action (Marketplace)**
-First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any repo — no binary install, no custom YAML step. Pre-adoption audit and CI gate both available as action inputs.
+**v0.10 — Package-level scanning**
+`fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
 
-**v0.11 — Package-level scanning**
-`fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption use case for teams pulling from MCP marketplaces (Smithery, mcp.so).
-
-**v0.12 — Python SDK + framework adapters**
-`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core is compiled as a native Python extension module — no Python reimplementation, full Rust performance. The Python layer is a thin adapter (~50 lines) that converts framework-native tool objects to JSON schema before calling into Rust. maturin builds platform wheels (Linux x86_64, macOS arm64, Windows) for PyPI distribution, fed from the same CI pipeline that produces the binary release.
-
-**v0.13 — npx wrapper**
-`npx fuzzd scan --schema tools.json` with no binary install. Removes the "compile Rust first" barrier for JavaScript/TypeScript teams. Thin wrapper that downloads the appropriate pre-built binary for the current platform.
-
-**v0.14 — `fuzzd validate` — benchmark-friendly evaluation mode**
-First-class subcommand for measuring scanner performance against labelled fixtures — replaces `bench/run.sh` with a proper CLI surface. Accepts any JSON tool list where each entry carries a `_meta.is_attack: true|false` field; runs the existing `DescriptionScanner` unchanged; reports detection rate, false-positive rate, and per-signal breakdown. No new detection code — purely a reporting layer over what already exists. Machine-readable JSON output (`--output json`) makes it composable with external benchmark harnesses and corpus contributor workflows (`fuzzd validate bench/mcptox_actual.json`).
+**v0.11 — Python SDK**
+`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
 
 ---
 
 ## Contributing
 
-**fuzzd is an early-stage open security tool and contributions are actively welcome.** The attack surface for agentic AI is evolving fast — no single team can keep up with it alone.
+**fuzzd is an early-stage open MCP security tool and contributions are actively welcome.** The attack surface for agentic AI is evolving fast — no single team can keep up with it alone.
 
 ### Ways to contribute
 
-**Add attack corpus records** — The corpus is the highest-leverage contribution. Each record encodes a known attack pattern as a reproducible test case, derived from published research. New paradigms, new vectors, and new real-world findings all belong here.
+**Add attack corpus records** — The corpus is the highest-leverage contribution. Each record encodes a known MCP attack pattern as a reproducible test case, derived from published research.
 
 1. Derive the pattern from published research (cite the source in `source` and `source_url`)
 2. Fill out the full `AttackRecord` schema (see `corpus/tool_poisoning/TPA-001.json` as a template)
 3. Validate it: `fuzzd corpus validate ./my-attack.json`
 4. Open a PR — new findings become new entries in the seed corpus
 
-**Improve detection signals** — Add pattern needles to `src/fuzzer/description.rs`, or add new `Signal` variants for attack patterns not yet covered. Run `./bench/run.sh` to measure the impact.
+**Improve detection signals** — Add pattern needles to `src/fuzzer/description.rs`, or add new `Signal` variants for MCP attack patterns not yet covered. Run `./bench/run.sh` to measure the impact.
 
 **Test against real MCP servers** — Run fuzzd against an MCP server you maintain or have permission to test. File issues for false positives, missed detections, or UX friction.
-
-**Build the next module** — The v0.6 observer, v0.7 semantic scanner, v0.9 SARIF reporter, and v0.10 GitHub Action are all well-scoped. See the open issues for starting points.
 
 ### Ground rules
 
@@ -366,8 +394,8 @@ First-class subcommand for measuring scanner performance against labelled fixtur
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
 - **MCP-SafetyBench** (2026) — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/html/2512.15163
 - **Systematic Analysis of MCP Security** (2025) — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
-- **mcp-server-fuzzer** — The existing Python-based stateless fuzzer (argument-only). https://github.com/Agent-Hellboy/mcp-server-fuzzer
+- **mcp-server-fuzzer** — The existing Python-based stateless MCP fuzzer (argument-only). https://github.com/Agent-Hellboy/mcp-server-fuzzer
 
 ---
 
-*Built in Rust. MIT licensed.*
+*Built in Rust. MIT licensed. Open source MCP security tooling.*

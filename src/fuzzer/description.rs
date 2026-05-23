@@ -1,12 +1,8 @@
-use std::sync::OnceLock;
-
-use aho_corasick::AhoCorasick;
-
 use crate::corpus::Severity;
 use crate::fuzzer::{Finding, Signal};
 use crate::protocol::mcp::ToolDefinition;
 
-use super::{scan_with_automaton, Pattern};
+use super::{Pattern, Scanner};
 
 // Each needle is already lowercase; the automaton matches case-insensitively (ASCII only).
 static PATTERNS: &[Pattern] = &[
@@ -757,38 +753,23 @@ static PATTERNS: &[Pattern] = &[
     },
 ];
 
+static SCANNER: Scanner = Scanner::new(PATTERNS);
+
 pub struct DescriptionScanner;
 
 impl DescriptionScanner {
-    /// Scan a list of tool definitions and return all findings.
-    pub fn scan(tools: &[ToolDefinition]) -> Vec<Finding> {
+    /// Scan tool definitions and return all findings.
+    pub fn scan<'a>(tools: impl IntoIterator<Item = &'a ToolDefinition>) -> Vec<Finding> {
         tools
-            .iter()
+            .into_iter()
             .flat_map(|tool| {
                 tool.description
                     .as_deref()
-                    .map(|desc| scan_one(&tool.name, desc))
+                    .map(|desc| SCANNER.scan_text(&tool.name, desc))
                     .unwrap_or_default()
             })
             .collect()
     }
-}
-
-/// Lazily-built Aho-Corasick automaton over all pattern needles.
-/// Built once on first use; shared across all subsequent scans.
-static AUTOMATON: OnceLock<AhoCorasick> = OnceLock::new();
-
-fn automaton() -> &'static AhoCorasick {
-    AUTOMATON.get_or_init(|| {
-        AhoCorasick::builder()
-            .ascii_case_insensitive(true)
-            .build(PATTERNS.iter().map(|p| p.needle))
-            .expect("valid pattern needles")
-    })
-}
-
-fn scan_one(tool_name: &str, description: &str) -> Vec<Finding> {
-    scan_with_automaton(automaton(), PATTERNS, tool_name, description)
 }
 
 #[cfg(test)]
