@@ -239,6 +239,8 @@ It would be easy to wire an LLM into fuzzd to generate novel attack prompts. Tha
 - No audit trail of what was actually tested
 - The attacker model should be exhaustive and reproducible, not probabilistic
 
+The data supports this. The leading commercial alternative (Cisco AI Defense) uses an LLM-as-a-Judge component that reasons from tool descriptions and achieved a **24.6% false positive rate** in independent evaluation against 130 benign MCP servers — flagging one in four legitimate tools as unsafe, even with GPT-5.4 as the backend [^18].
+
 The right model is a **curated, versioned attack corpus** — structured records of known attack patterns derived from research, encoded as reproducible test cases. This is how [Metasploit](https://github.com/rapid7/metasploit-framework), [Nuclei](https://github.com/projectdiscovery/nuclei), and every serious security tool works. The corpus is a first-class artifact.
 
 ---
