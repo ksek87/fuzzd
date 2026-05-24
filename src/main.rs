@@ -10,6 +10,7 @@ mod fuzzer;
 mod protocol;
 mod reporter;
 mod runner;
+mod suppress;
 #[cfg(test)]
 mod testutil;
 mod utils;
@@ -24,6 +25,7 @@ use protocol::transport::Transport;
 use reporter::BenchmarkReport;
 use runner::harness::Harness;
 use runner::observer::Observer;
+use suppress::{SuppressConfig, DEFAULT_SUPPRESS_PATH};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -49,7 +51,10 @@ async fn main() -> Result<()> {
             let tools = serde_json::from_str::<ListToolsResult>(&src)
                 .map(|r| r.tools)
                 .or_else(|_| serde_json::from_str(&src))?;
-            let findings = DescriptionScanner::scan(&tools);
+            let suppress =
+                SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
+            let mut findings = DescriptionScanner::scan(&tools);
+            apply_suppressions(&mut findings, &suppress);
             reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
             exit_if_blocking(&findings);
         }
@@ -58,6 +63,15 @@ async fn main() -> Result<()> {
             let findings = DescriptionScanner::scan(labelled.iter().map(|lt| &lt.tool));
             let report = compute_benchmark(&labelled, &findings);
             reporter::write_benchmark(&report, &args.output, args.out.as_deref())?;
+        }
+        Command::Suppress(args) => {
+            SuppressConfig::append(&args.suppress_file, &args.tool, &args.signal, &args.reason)?;
+            println!(
+                "suppressed {}/{} in {}",
+                args.tool,
+                args.signal,
+                args.suppress_file.display()
+            );
         }
         Command::Corpus(args) => {
             let mut corpus = Corpus::embedded();
@@ -165,13 +179,34 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         }
     }
 
+    let suppress = SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
+    apply_suppressions(&mut findings, &suppress);
+
     reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
     exit_if_blocking(&findings);
     Ok(())
 }
 
+/// Mark findings as suppressed and warn about stale suppress entries.
+fn apply_suppressions(findings: &mut [Finding], config: &SuppressConfig) {
+    for f in findings.iter_mut() {
+        if config.is_suppressed(f) {
+            f.suppressed = true;
+        }
+    }
+    for entry in config.stale_entries(findings) {
+        eprintln!(
+            "warn: suppress entry {}/{} has no matching finding — the tool may be fixed",
+            entry.tool, entry.signal
+        );
+    }
+}
+
 fn exit_if_blocking(findings: &[Finding]) {
-    if findings.iter().any(|f| f.severity >= Severity::High) {
+    if findings
+        .iter()
+        .any(|f| !f.suppressed && f.severity >= Severity::High)
+    {
         std::process::exit(1);
     }
 }

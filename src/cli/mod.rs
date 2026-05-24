@@ -26,6 +26,9 @@ pub enum Command {
 
     /// Manage the attack corpus.
     Corpus(CorpusArgs),
+
+    /// Suppress a known finding so it no longer blocks CI.
+    Suppress(SuppressArgs),
 }
 
 // ── audit ──────────────────────────────────────────────────────────────────
@@ -126,6 +129,25 @@ pub enum CorpusAction {
         /// Path to the JSON record file.
         path: PathBuf,
     },
+}
+
+// ── suppress ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, clap::Args)]
+pub struct SuppressArgs {
+    /// Tool name to suppress (must match the finding's tool name exactly).
+    pub tool: String,
+
+    /// Signal to suppress (e.g. message_hijacking, privileged_path).
+    pub signal: String,
+
+    /// Human-readable reason recorded in .fuzzd/suppress.toml.
+    #[arg(long)]
+    pub reason: String,
+
+    /// Path to the suppress file (default: .fuzzd/suppress.toml).
+    #[arg(long, default_value = ".fuzzd/suppress.toml")]
+    pub suppress_file: std::path::PathBuf,
 }
 
 // ── value enums ────────────────────────────────────────────────────────────

@@ -58,13 +58,29 @@ fn render_markdown(findings: &[Finding], tools_scanned: usize) -> String {
     if findings.is_empty() {
         return format!("No issues found in {} tool(s).\n", tools_scanned);
     }
+
+    // Partition after the early return so we pay no allocation cost on the empty path.
+    let active: Vec<_> = findings.iter().filter(|f| !f.suppressed).collect();
+    let suppressed: Vec<_> = findings.iter().filter(|f| f.suppressed).collect();
+
+    if active.is_empty() {
+        // All findings are suppressed — report as clean with a suppressed summary.
+        let mut out = format!("No active issues in {} tool(s).\n\n", tools_scanned);
+        out.push_str(&format!("{} suppressed finding(s):\n", suppressed.len()));
+        for f in &suppressed {
+            out.push_str(&format!("  [suppressed] {} — {}\n", f.tool_name, f.signal));
+        }
+        out.push('\n');
+        return out;
+    }
+
     let mut out = String::new();
     out.push_str(&format!(
         "{} finding(s) in {} tool(s):\n\n",
-        findings.len(),
+        active.len(),
         tools_scanned
     ));
-    for f in findings {
+    for f in &active {
         out.push_str(&format!(
             "[{}] {} — {} ({})\n",
             f.severity, f.tool_name, f.signal, f.detail
@@ -72,6 +88,13 @@ fn render_markdown(findings: &[Finding], tools_scanned: usize) -> String {
         out.push_str(&format!("  matched: {}\n", f.matched_text));
         if !f.corpus_refs.is_empty() {
             out.push_str(&format!("  refs:    {}\n", f.corpus_refs.join(", ")));
+        }
+        out.push('\n');
+    }
+    if !suppressed.is_empty() {
+        out.push_str(&format!("{} suppressed finding(s):\n", suppressed.len()));
+        for f in &suppressed {
+            out.push_str(&format!("  [suppressed] {} — {}\n", f.tool_name, f.signal));
         }
         out.push('\n');
     }
@@ -89,6 +112,7 @@ fn render_json(findings: &[Finding], tools_scanned: usize) -> Result<String> {
                 "matched": f.matched_text,
                 "detail": f.detail,
                 "corpus_refs": f.corpus_refs,
+                "suppressed": f.suppressed,
             })
         })
         .collect();
@@ -99,19 +123,43 @@ fn render_json(findings: &[Finding], tools_scanned: usize) -> Result<String> {
     Ok(serde_json::to_string_pretty(&wrapper)?)
 }
 
+/// Stable per-result SARIF fingerprint. Appends an ASCII-alphanumeric slice of
+/// the matched text so two findings with the same (tool, signal) from different
+/// scanners produce distinct, stable fingerprints within the same run.
+fn sarif_fingerprint(f: &Finding) -> String {
+    let text_sig: String = f
+        .matched_text
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(16)
+        .collect();
+    if text_sig.is_empty() {
+        f.id()
+    } else {
+        format!("{}/{}", f.id(), text_sig)
+    }
+}
+
 fn render_sarif(findings: &[Finding]) -> Result<String> {
     let rules = sarif_rules();
     let results: Vec<_> = findings
         .iter()
         .map(|f| {
-            json!({
+            let mut result = json!({
                 "ruleId": signal_rule_id(&f.signal),
                 "level": severity_level(&f.severity),
                 "message": {"text": format!("{}: {}", f.detail, f.matched_text)},
                 "locations": [{
                     "logicalLocations": [{"name": f.tool_name, "kind": "function"}]
-                }]
-            })
+                }],
+                "partialFingerprints": {
+                    "primaryLocationLineHash/v1": sarif_fingerprint(f)
+                },
+            });
+            if f.suppressed {
+                result["suppressions"] = json!([{"kind": "external", "justification": "suppressed via .fuzzd/suppress.toml"}]);
+            }
+            result
         })
         .collect();
 
@@ -268,6 +316,7 @@ mod tests {
             matched_text: "matched snippet".to_string(),
             detail: "test detail".to_string(),
             corpus_refs: &["TPA-001"],
+            suppressed: false,
         }
     }
 
@@ -393,5 +442,79 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         let val: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert_eq!(val["tools_scanned"], 1);
+    }
+
+    #[test]
+    fn markdown_suppressed_findings_shown_separately() {
+        let mut suppressed = finding("safe_tool", Signal::ImperativeOverride, Severity::High);
+        suppressed.suppressed = true;
+        let active = finding("bad_tool", Signal::CredentialReference, Severity::Critical);
+        let out = render_markdown(&[active, suppressed], 2);
+        assert!(out.contains("bad_tool"));
+        assert!(out.contains("1 suppressed finding(s)"));
+        assert!(out.contains("[suppressed] safe_tool"));
+    }
+
+    #[test]
+    fn json_includes_suppressed_field() {
+        let mut f = finding("t", Signal::StealthLanguage, Severity::Medium);
+        f.suppressed = true;
+        let out = render_json(&[f], 1).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(val["findings"][0]["suppressed"], true);
+    }
+
+    #[test]
+    fn sarif_active_finding_has_partial_fingerprint() {
+        let findings = vec![finding(
+            "my_tool",
+            Signal::HtmlInjectionTag,
+            Severity::Critical,
+        )];
+        let out = render_sarif(&findings).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let fp = &val["runs"][0]["results"][0]["partialFingerprints"];
+        // Fingerprint = "tool/signal/text_discriminator" where text_discriminator
+        // is the first 16 ASCII-alphanumeric chars of the matched text.
+        assert_eq!(
+            fp["primaryLocationLineHash/v1"],
+            "my_tool/html_injection_tag/matchedsnippet"
+        );
+        assert!(val["runs"][0]["results"][0]["suppressions"].is_null());
+    }
+
+    #[test]
+    fn sarif_suppressed_finding_has_suppressions_array() {
+        let mut f = finding("my_tool", Signal::HtmlInjectionTag, Severity::Critical);
+        f.suppressed = true;
+        let out = render_sarif(&[f]).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let sups = &val["runs"][0]["results"][0]["suppressions"];
+        assert!(sups.is_array());
+        assert_eq!(sups[0]["kind"], "external");
+    }
+
+    #[test]
+    fn markdown_all_suppressed_shows_no_active_issues() {
+        let mut f1 = finding("tool_a", Signal::ImperativeOverride, Severity::High);
+        let mut f2 = finding("tool_b", Signal::StealthLanguage, Severity::Medium);
+        f1.suppressed = true;
+        f2.suppressed = true;
+        let out = render_markdown(&[f1, f2], 5);
+        assert!(out.contains("No active issues in 5 tool(s)"));
+        assert!(out.contains("2 suppressed finding(s)"));
+        assert!(!out.contains("finding(s) in 5 tool(s)"));
+    }
+
+    #[test]
+    fn markdown_active_count_excludes_suppressed() {
+        let active = finding("bad_tool", Signal::CredentialReference, Severity::Critical);
+        let mut sup1 = finding("s1", Signal::ImperativeOverride, Severity::High);
+        let mut sup2 = finding("s2", Signal::StealthLanguage, Severity::Medium);
+        sup1.suppressed = true;
+        sup2.suppressed = true;
+        let out = render_markdown(&[active, sup1, sup2], 3);
+        assert!(out.contains("1 finding(s) in 3 tool(s)"));
+        assert!(out.contains("2 suppressed finding(s)"));
     }
 }

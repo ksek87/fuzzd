@@ -55,9 +55,12 @@ pub enum Signal {
     EmbeddedInstruction,
 }
 
-impl std::fmt::Display for Signal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+impl Signal {
+    /// Returns the canonical snake_case name as a `&'static str`.
+    /// Prefer this over `.to_string()` in comparison and key-building paths
+    /// to avoid heap allocation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
             Self::ImperativeOverride => "imperative_override",
             Self::CredentialReference => "credential_reference",
             Self::PrivilegedPath => "privileged_path",
@@ -72,8 +75,13 @@ impl std::fmt::Display for Signal {
             Self::MessageHijacking => "message_hijacking",
             Self::UnicodeObfuscation => "unicode_obfuscation",
             Self::EmbeddedInstruction => "embedded_instruction",
-        };
-        write!(f, "{s}")
+        }
+    }
+}
+
+impl std::fmt::Display for Signal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -91,6 +99,16 @@ pub struct Finding {
     pub detail: String,
     /// Related corpus record IDs from the seed corpus.
     pub corpus_refs: &'static [&'static str],
+    /// True when this finding has been suppressed via `.fuzzd/suppress.toml`.
+    pub suppressed: bool,
+}
+
+impl Finding {
+    /// Stable fingerprint for this finding: `"<tool>/<signal>"`.
+    /// Used as SARIF `partialFingerprints` key for persistent GitHub dismissals.
+    pub fn id(&self) -> String {
+        format!("{}/{}", self.tool_name, self.signal.as_str())
+    }
 }
 
 // ── Shared scanner infrastructure ─────────────────────────────────────────────
@@ -153,6 +171,7 @@ fn scan_with_automaton(
                 matched_text: extract_snippet(text, m.start(), m.end()),
                 detail: p.detail.to_string(),
                 corpus_refs: p.corpus_refs,
+                suppressed: false,
             })
         })
         .collect()

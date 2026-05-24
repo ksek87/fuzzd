@@ -39,6 +39,11 @@ impl HttpTransport {
                         Ok(s) => buf.push_str(s),
                         Err(_) => continue,
                     }
+                    // Guard against a malicious server that withholds SSE event
+                    // separators (\n\n) to grow the buffer without bound.
+                    if buf.len() > 64 << 20 {
+                        break;
+                    }
                     // Collect all parsed responses synchronously, then acquire the
                     // lock once per chunk rather than once per response.
                     let mut ready: Vec<(String, JsonRpcResponse)> = Vec::new();
