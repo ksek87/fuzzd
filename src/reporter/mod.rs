@@ -236,6 +236,13 @@ fn signal_rule_id(signal: &Signal) -> &'static str {
         Signal::MessageHijacking => "FUZZD-012",
         Signal::UnicodeObfuscation => "FUZZD-013",
         Signal::EmbeddedInstruction => "FUZZD-014",
+        Signal::AnsiEscapeObfuscation => "FUZZD-015",
+        Signal::ToolSelectionBias => "FUZZD-016",
+        Signal::IdentityImpersonation => "FUZZD-017",
+        Signal::RawContentPassthrough => "FUZZD-018",
+        Signal::ValueSubstitution => "FUZZD-019",
+        Signal::ToolEnumerationRecon => "FUZZD-020",
+        Signal::SamplingPipelineHijack => "FUZZD-021",
     }
 }
 
@@ -269,6 +276,25 @@ fn signal_description(signal: &Signal) -> &'static str {
             "Zero-width or invisible Unicode characters hiding malicious instructions"
         }
         Signal::EmbeddedInstruction => "Prompt-injection instruction detected in a tool response",
+        Signal::AnsiEscapeObfuscation => {
+            "ANSI terminal escape sequences hiding instructions from human reviewers"
+        }
+        Signal::ToolSelectionBias => {
+            "Credibility-based framing used to bias LLM tool selection toward this tool"
+        }
+        Signal::IdentityImpersonation => {
+            "Unverifiable provenance or authority claims used to elevate tool trust"
+        }
+        Signal::RawContentPassthrough => {
+            "Instructions to pass retrieved content forward unfiltered, maximising indirect injection surface"
+        }
+        Signal::ValueSubstitution => "Normalisation-disguised argument value substitution",
+        Signal::ToolEnumerationRecon => {
+            "Instructions to enumerate all available tools in the session for reconnaissance"
+        }
+        Signal::SamplingPipelineHijack => {
+            "Tool inserted as a mandatory intermediary for all agent queries via the sampling pipeline"
+        }
     }
 }
 
@@ -289,6 +315,13 @@ fn sarif_rules() -> Vec<serde_json::Value> {
         MessageHijacking,
         UnicodeObfuscation,
         EmbeddedInstruction,
+        AnsiEscapeObfuscation,
+        ToolSelectionBias,
+        IdentityImpersonation,
+        RawContentPassthrough,
+        ValueSubstitution,
+        ToolEnumerationRecon,
+        SamplingPipelineHijack,
     ]
     .iter()
     .map(|s| {
@@ -370,7 +403,7 @@ mod tests {
     #[test]
     fn sarif_rules_covers_all_signals() {
         let rules = sarif_rules();
-        assert_eq!(rules.len(), 14);
+        assert_eq!(rules.len(), 21);
     }
 
     #[test]

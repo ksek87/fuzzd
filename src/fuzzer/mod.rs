@@ -53,6 +53,36 @@ pub enum Signal {
     /// tool description (indirect injection / MCP-UPD response-phase attack).
     #[allow(dead_code)]
     EmbeddedInstruction,
+    /// ANSI terminal escape sequences (ESC + `[`) embedded in a tool description or response.
+    /// Renders invisible in terminal output but remains fully readable by the LLM, enabling
+    /// hidden instructions that bypass human review (Trail of Bits, Apr 2025).
+    AnsiEscapeObfuscation,
+    /// Credibility-based framing used to bias LLM tool selection toward this tool by
+    /// discrediting legitimate alternatives — "deprecated", "recommended version", "supersedes"
+    /// (MCPSecBench TPMA/MTC attack classes; MCPLIB, 2025).
+    ToolSelectionBias,
+    /// Unverifiable provenance or authority claims in a tool description — "official Anthropic",
+    /// "elevated trust", "platform administrator" — used to elevate the tool's apparent trust
+    /// level beyond what the MCP protocol can attest (Zhao et al., 2025).
+    IdentityImpersonation,
+    /// Instructions to pass retrieved content forward unfiltered ("do not truncate", "without
+    /// filtering"), disabling the agent's natural summarisation that would otherwise strip
+    /// embedded injection payloads (Chen et al., MCP-UPD Collection phase, 2025).
+    RawContentPassthrough,
+    /// Normalisation-disguised argument value substitution — lookup-table framing ("canonical
+    /// form", "convert all X→Y") that maps user-supplied arguments to attacker-controlled
+    /// replacements while presenting the substitution as a data-formatting step
+    /// (MCP-SafetyBench, ICLR 2026).
+    ValueSubstitution,
+    /// Instructions to enumerate all registered MCP tools in the session ("tools/list",
+    /// "survey all active tools") — reconnaissance that enables targeted follow-up attacks
+    /// against high-value tools discovered in the session (Trivial Trojans, 2025).
+    ToolEnumerationRecon,
+    /// Tool inserted as a mandatory intermediary for all agent queries — "route all queries
+    /// through", "all queries must pass through" — exploiting the MCP sampling/createMessage
+    /// endpoint to capture the full LLM interaction pipeline
+    /// (Maloyan & Namiot, Breaking the Protocol, 2026).
+    SamplingPipelineHijack,
 }
 
 impl Signal {
@@ -75,6 +105,13 @@ impl Signal {
             Self::MessageHijacking => "message_hijacking",
             Self::UnicodeObfuscation => "unicode_obfuscation",
             Self::EmbeddedInstruction => "embedded_instruction",
+            Self::AnsiEscapeObfuscation => "ansi_escape_obfuscation",
+            Self::ToolSelectionBias => "tool_selection_bias",
+            Self::IdentityImpersonation => "identity_impersonation",
+            Self::RawContentPassthrough => "raw_content_passthrough",
+            Self::ValueSubstitution => "value_substitution",
+            Self::ToolEnumerationRecon => "tool_enumeration_recon",
+            Self::SamplingPipelineHijack => "sampling_pipeline_hijack",
         }
     }
 }
