@@ -38,6 +38,11 @@ impl StdioTransport {
         let reader_task = tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
+                // Guard against a malicious server that withholds newlines to
+                // exhaust memory — disconnect once a single line exceeds 1 MiB.
+                if line.len() > 1 << 20 {
+                    break;
+                }
                 let line = line.trim().to_string();
                 if line.is_empty() {
                     continue;

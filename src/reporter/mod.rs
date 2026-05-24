@@ -123,6 +123,23 @@ fn render_json(findings: &[Finding], tools_scanned: usize) -> Result<String> {
     Ok(serde_json::to_string_pretty(&wrapper)?)
 }
 
+/// Stable per-result SARIF fingerprint. Appends an ASCII-alphanumeric slice of
+/// the matched text so two findings with the same (tool, signal) from different
+/// scanners produce distinct, stable fingerprints within the same run.
+fn sarif_fingerprint(f: &Finding) -> String {
+    let text_sig: String = f
+        .matched_text
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(16)
+        .collect();
+    if text_sig.is_empty() {
+        f.id()
+    } else {
+        format!("{}/{}", f.id(), text_sig)
+    }
+}
+
 fn render_sarif(findings: &[Finding]) -> Result<String> {
     let rules = sarif_rules();
     let results: Vec<_> = findings
@@ -136,7 +153,7 @@ fn render_sarif(findings: &[Finding]) -> Result<String> {
                     "logicalLocations": [{"name": f.tool_name, "kind": "function"}]
                 }],
                 "partialFingerprints": {
-                    "primaryLocationLineHash/v1": f.id()
+                    "primaryLocationLineHash/v1": sarif_fingerprint(f)
                 },
             });
             if f.suppressed {
@@ -457,9 +474,11 @@ mod tests {
         let out = render_sarif(&findings).unwrap();
         let val: serde_json::Value = serde_json::from_str(&out).unwrap();
         let fp = &val["runs"][0]["results"][0]["partialFingerprints"];
+        // Fingerprint = "tool/signal/text_discriminator" where text_discriminator
+        // is the first 16 ASCII-alphanumeric chars of the matched text.
         assert_eq!(
             fp["primaryLocationLineHash/v1"],
-            "my_tool/html_injection_tag"
+            "my_tool/html_injection_tag/matchedsnippet"
         );
         assert!(val["runs"][0]["results"][0]["suppressions"].is_null());
     }

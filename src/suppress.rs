@@ -108,7 +108,10 @@ impl SuppressConfig {
         // Write to a sibling temp file then rename — atomic on Unix, safe on crash.
         let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, &content)?;
-        std::fs::rename(&tmp, path)?;
+        if let Err(e) = std::fs::rename(&tmp, path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e.into());
+        }
         Ok(())
     }
 }
