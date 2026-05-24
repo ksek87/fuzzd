@@ -91,6 +91,16 @@ pub struct Finding {
     pub detail: String,
     /// Related corpus record IDs from the seed corpus.
     pub corpus_refs: &'static [&'static str],
+    /// True when this finding has been suppressed via `.fuzzd/suppress.toml`.
+    pub suppressed: bool,
+}
+
+impl Finding {
+    /// Stable fingerprint for this finding: `"<tool>/<signal>"`.
+    /// Used as SARIF `partialFingerprints` key for persistent GitHub dismissals.
+    pub fn id(&self) -> String {
+        format!("{}/{}", self.tool_name, self.signal)
+    }
 }
 
 // ── Shared scanner infrastructure ─────────────────────────────────────────────
@@ -153,6 +163,7 @@ fn scan_with_automaton(
                 matched_text: extract_snippet(text, m.start(), m.end()),
                 detail: p.detail.to_string(),
                 corpus_refs: p.corpus_refs,
+                suppressed: false,
             })
         })
         .collect()

@@ -1009,6 +1009,7 @@ fn scan_structural(tool_name: &str, text: &str) -> Vec<Finding> {
                     matched_text: extract_snippet(text, byte_start, byte_end),
                     detail: "Structural: universal-scope relay — imperative relay verb with quantifier and communication noun".to_string(),
                     corpus_refs: &["TPA-020"],
+                    suppressed: false,
                 });
             }
         }
@@ -1027,6 +1028,7 @@ fn scan_structural(tool_name: &str, text: &str) -> Vec<Finding> {
                     matched_text: extract_snippet(text, byte_start, byte_end),
                     detail: "Structural: universal-scope inclusion — imperative inclusion verb with quantifier and request noun".to_string(),
                     corpus_refs: &["TPA-015"],
+                    suppressed: false,
                 });
             }
         }
@@ -1092,6 +1094,7 @@ fn scan_semantic(tool_name: &str, text: &str) -> Vec<Finding> {
                     matched_text: extract_snippet(text, byte_start, byte_end),
                     detail: "Semantic: relay-class verb in when-using construction — GloVe 50d neighbour of redirect/forward (cosine ≥ 0.65)".to_string(),
                     corpus_refs: &["TPA-020"],
+                    suppressed: false,
                 });
                 relay_emitted = true;
             }
@@ -1105,6 +1108,7 @@ fn scan_semantic(tool_name: &str, text: &str) -> Vec<Finding> {
                     matched_text: extract_snippet(text, byte_start, byte_end),
                     detail: "Semantic: override-class verb in when-using construction — GloVe 50d neighbour of override/replace (cosine ≥ 0.65)".to_string(),
                     corpus_refs: &["TPA-015"],
+                    suppressed: false,
                 });
                 override_emitted = true;
             }
