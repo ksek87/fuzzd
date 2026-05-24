@@ -1,9 +1,13 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::fuzzer::Finding;
+
+/// Default path for the suppress file, relative to the working directory.
+pub const DEFAULT_SUPPRESS_PATH: &str = ".fuzzd/suppress.toml";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SuppressEntry {
@@ -20,32 +24,56 @@ struct SuppressFile {
 
 pub struct SuppressConfig {
     entries: Vec<SuppressEntry>,
+    /// Pre-built set of `"tool/signal"` keys for O(1) `is_suppressed` lookup.
+    key_set: HashSet<String>,
 }
 
 impl SuppressConfig {
+    fn build_key_set(entries: &[SuppressEntry]) -> HashSet<String> {
+        entries
+            .iter()
+            .map(|e| format!("{}/{}", e.tool, e.signal))
+            .collect()
+    }
+
     /// Load suppressions from `path`. Returns an empty config if the file does not exist.
     pub fn load_or_empty(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self {
                 entries: Vec::new(),
+                key_set: HashSet::new(),
             });
         }
         let content = std::fs::read_to_string(path)?;
         let file: SuppressFile = toml::from_str(&content)?;
+        let key_set = Self::build_key_set(&file.suppress);
         Ok(Self {
             entries: file.suppress,
+            key_set,
         })
     }
 
+    /// Returns true if `finding` has a matching suppress entry. O(1) hash lookup.
     pub fn is_suppressed(&self, finding: &Finding) -> bool {
-        let signal_str = finding.signal.to_string();
+        self.key_set.contains(finding.id().as_str())
+    }
+
+    /// Returns entries that have no corresponding finding in `findings`.
+    /// Builds a `HashSet` from findings first for O(N+M) total cost.
+    pub fn stale_entries<'a>(&'a self, findings: &[Finding]) -> Vec<&'a SuppressEntry> {
+        let found: HashSet<(&str, &str)> = findings
+            .iter()
+            .map(|f| (f.tool_name.as_str(), f.signal.as_str()))
+            .collect();
         self.entries
             .iter()
-            .any(|e| e.tool == finding.tool_name && e.signal == signal_str)
+            .filter(|e| !found.contains(&(e.tool.as_str(), e.signal.as_str())))
+            .collect()
     }
 
     /// Append a new suppress entry to `path`, creating the file (and parent dirs) as needed.
     /// Returns an error if an entry for `tool`/`signal` already exists.
+    /// Writes atomically via a sibling temp file + rename to prevent corruption on crash.
     pub fn append(path: &Path, tool: &str, signal: &str, reason: &str) -> Result<()> {
         let mut file = if path.exists() {
             let content = std::fs::read_to_string(path)?;
@@ -77,21 +105,11 @@ impl SuppressConfig {
         });
 
         let content = toml::to_string_pretty(&file)?;
-        std::fs::write(path, content)?;
+        // Write to a sibling temp file then rename — atomic on Unix, safe on crash.
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, &content)?;
+        std::fs::rename(&tmp, path)?;
         Ok(())
-    }
-
-    /// Returns entries that have no corresponding finding in `findings`.
-    /// Used to warn about stale suppressions (the tool may have been fixed).
-    pub fn stale_entries<'a>(&'a self, findings: &[Finding]) -> Vec<&'a SuppressEntry> {
-        self.entries
-            .iter()
-            .filter(|e| {
-                !findings
-                    .iter()
-                    .any(|f| f.tool_name == e.tool && f.signal.to_string() == e.signal)
-            })
-            .collect()
     }
 }
 
@@ -113,23 +131,24 @@ mod tests {
         }
     }
 
+    fn config(entries: Vec<SuppressEntry>) -> SuppressConfig {
+        let key_set = SuppressConfig::build_key_set(&entries);
+        SuppressConfig { entries, key_set }
+    }
+
     #[test]
     fn empty_config_suppresses_nothing() {
-        let cfg = SuppressConfig {
-            entries: Vec::new(),
-        };
+        let cfg = config(vec![]);
         assert!(!cfg.is_suppressed(&finding("send_email", Signal::MessageHijacking)));
     }
 
     #[test]
     fn matching_entry_suppresses() {
-        let cfg = SuppressConfig {
-            entries: vec![SuppressEntry {
-                tool: "send_email".into(),
-                signal: "message_hijacking".into(),
-                reason: "reviewed".into(),
-            }],
-        };
+        let cfg = config(vec![SuppressEntry {
+            tool: "send_email".into(),
+            signal: "message_hijacking".into(),
+            reason: "reviewed".into(),
+        }]);
         assert!(cfg.is_suppressed(&finding("send_email", Signal::MessageHijacking)));
         assert!(!cfg.is_suppressed(&finding("send_email", Signal::CredentialReference)));
         assert!(!cfg.is_suppressed(&finding("other_tool", Signal::MessageHijacking)));
@@ -166,20 +185,18 @@ mod tests {
 
     #[test]
     fn stale_entries_detects_missing_findings() {
-        let cfg = SuppressConfig {
-            entries: vec![
-                SuppressEntry {
-                    tool: "fixed_tool".into(),
-                    signal: "message_hijacking".into(),
-                    reason: "was fixed".into(),
-                },
-                SuppressEntry {
-                    tool: "active_tool".into(),
-                    signal: "privileged_path".into(),
-                    reason: "reviewed".into(),
-                },
-            ],
-        };
+        let cfg = config(vec![
+            SuppressEntry {
+                tool: "fixed_tool".into(),
+                signal: "message_hijacking".into(),
+                reason: "was fixed".into(),
+            },
+            SuppressEntry {
+                tool: "active_tool".into(),
+                signal: "privileged_path".into(),
+                reason: "reviewed".into(),
+            },
+        ]);
         let findings = vec![finding("active_tool", Signal::PrivilegedPath)];
         let stale = cfg.stale_entries(&findings);
         assert_eq!(stale.len(), 1);

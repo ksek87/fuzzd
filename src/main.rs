@@ -25,7 +25,7 @@ use protocol::transport::Transport;
 use reporter::BenchmarkReport;
 use runner::harness::Harness;
 use runner::observer::Observer;
-use suppress::SuppressConfig;
+use suppress::{SuppressConfig, DEFAULT_SUPPRESS_PATH};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,8 +51,8 @@ async fn main() -> Result<()> {
             let tools = serde_json::from_str::<ListToolsResult>(&src)
                 .map(|r| r.tools)
                 .or_else(|_| serde_json::from_str(&src))?;
-            let suppress_path = std::path::Path::new(".fuzzd/suppress.toml");
-            let suppress = SuppressConfig::load_or_empty(suppress_path)?;
+            let suppress =
+                SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
             let mut findings = DescriptionScanner::scan(&tools);
             apply_suppressions(&mut findings, &suppress);
             reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
@@ -179,8 +179,7 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         }
     }
 
-    let suppress_path = std::path::Path::new(".fuzzd/suppress.toml");
-    let suppress = SuppressConfig::load_or_empty(suppress_path)?;
+    let suppress = SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
     apply_suppressions(&mut findings, &suppress);
 
     reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
@@ -188,8 +187,7 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     Ok(())
 }
 
-/// Mark findings as suppressed where a matching entry exists in `config`.
-/// Emits a warning for any suppress entry that has no matching finding.
+/// Mark findings as suppressed and warn about stale suppress entries.
 fn apply_suppressions(findings: &mut [Finding], config: &SuppressConfig) {
     for f in findings.iter_mut() {
         if config.is_suppressed(f) {

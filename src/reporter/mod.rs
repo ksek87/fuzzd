@@ -55,16 +55,29 @@ fn write_output(content: &str, out: Option<&Path>) -> Result<()> {
 }
 
 fn render_markdown(findings: &[Finding], tools_scanned: usize) -> String {
-    let active: Vec<_> = findings.iter().filter(|f| !f.suppressed).collect();
-    let suppressed: Vec<_> = findings.iter().filter(|f| f.suppressed).collect();
-
     if findings.is_empty() {
         return format!("No issues found in {} tool(s).\n", tools_scanned);
     }
+
+    // Partition after the early return so we pay no allocation cost on the empty path.
+    let active: Vec<_> = findings.iter().filter(|f| !f.suppressed).collect();
+    let suppressed: Vec<_> = findings.iter().filter(|f| f.suppressed).collect();
+
+    if active.is_empty() {
+        // All findings are suppressed — report as clean with a suppressed summary.
+        let mut out = format!("No active issues in {} tool(s).\n\n", tools_scanned);
+        out.push_str(&format!("{} suppressed finding(s):\n", suppressed.len()));
+        for f in &suppressed {
+            out.push_str(&format!("  [suppressed] {} — {}\n", f.tool_name, f.signal));
+        }
+        out.push('\n');
+        return out;
+    }
+
     let mut out = String::new();
     out.push_str(&format!(
         "{} finding(s) in {} tool(s):\n\n",
-        findings.len(),
+        active.len(),
         tools_scanned
     ));
     for f in &active {
@@ -460,5 +473,29 @@ mod tests {
         let sups = &val["runs"][0]["results"][0]["suppressions"];
         assert!(sups.is_array());
         assert_eq!(sups[0]["kind"], "external");
+    }
+
+    #[test]
+    fn markdown_all_suppressed_shows_no_active_issues() {
+        let mut f1 = finding("tool_a", Signal::ImperativeOverride, Severity::High);
+        let mut f2 = finding("tool_b", Signal::StealthLanguage, Severity::Medium);
+        f1.suppressed = true;
+        f2.suppressed = true;
+        let out = render_markdown(&[f1, f2], 5);
+        assert!(out.contains("No active issues in 5 tool(s)"));
+        assert!(out.contains("2 suppressed finding(s)"));
+        assert!(!out.contains("finding(s) in 5 tool(s)"));
+    }
+
+    #[test]
+    fn markdown_active_count_excludes_suppressed() {
+        let active = finding("bad_tool", Signal::CredentialReference, Severity::Critical);
+        let mut sup1 = finding("s1", Signal::ImperativeOverride, Severity::High);
+        let mut sup2 = finding("s2", Signal::StealthLanguage, Severity::Medium);
+        sup1.suppressed = true;
+        sup2.suppressed = true;
+        let out = render_markdown(&[active, sup1, sup2], 3);
+        assert!(out.contains("1 finding(s) in 3 tool(s)"));
+        assert!(out.contains("2 suppressed finding(s)"));
     }
 }
