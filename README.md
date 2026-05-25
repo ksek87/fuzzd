@@ -324,20 +324,24 @@ fuzzd/
 | 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
 | 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | ✅ Done |
 | 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | ✅ Done |
-| 10 | v0.10 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
-| 11 | v0.11 — GitHub Action (Marketplace) | 🔜 Planned |
-| 12 | v0.12 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 13 | v0.13 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 14 | v0.14 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 15 | v0.15 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 16 | v0.16 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 17 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 18 | v2.0 — Capability escape tester | 🔜 Planned |
+| 10 | v0.10 — TF-IDF semantic detection (domain-specific attack language, always-on, zero dependencies) | 🔜 Next |
+| 11 | v0.11 — Neural embedding semantic layer (upgrade from TF-IDF; model management; calibration) | 🔜 Planned |
+| 12 | v0.12 — GitHub Action (Marketplace) | 🔜 Planned |
+| 13 | v0.13 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 14 | v0.14 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 15 | v0.15 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 16 | v0.16 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 17 | v0.17 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 18 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 19 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Upcoming milestone detail
 
-**v0.10 — Semantic detection layer**
-Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
+**v0.10 — TF-IDF semantic detection** ([#50](https://github.com/ksek87/fuzzd/issues/50))
+Adds a fourth scanner pass using TF-IDF cosine similarity against a set of abstract attack archetypes — canonical sentences derived from research that capture the *semantic intent* of domain-specific argument hijacking and relay attacks. No model download, no network dependency, always-on, deterministic output. Targets the application-specific redirect language that is the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Fires at Low/Informational severity to distinguish from deterministic pattern findings.
+
+**v0.11 — Neural embedding semantic layer** ([#51](https://github.com/ksek87/fuzzd/issues/51))
+Upgrades the TF-IDF pass to a full neural sentence embedding approach once the TF-IDF baseline is in production and a recall improvement target can be measured. This is a distinct AI/ML engineering effort with five sub-tickets covering model evaluation (#52), archetype embedding (#53), model management infrastructure (#54), scanner integration (#55), and threshold calibration against a real-world corpus (#56). Gated on v0.10 shipping first.
 
 **v0.11 — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
