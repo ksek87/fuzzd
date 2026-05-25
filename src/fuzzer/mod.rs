@@ -114,6 +114,96 @@ impl Signal {
             Self::SamplingPipelineHijack => "sampling_pipeline_hijack",
         }
     }
+
+    /// SARIF rule ID for this signal (FUZZD-NNN).
+    pub fn rule_id(&self) -> &'static str {
+        match self {
+            Self::ImperativeOverride => "FUZZD-001",
+            Self::CredentialReference => "FUZZD-002",
+            Self::PrivilegedPath => "FUZZD-003",
+            Self::ExfiltrationMechanism => "FUZZD-004",
+            Self::StealthLanguage => "FUZZD-005",
+            Self::SessionPersistence => "FUZZD-006",
+            Self::CrossToolContamination => "FUZZD-007",
+            Self::FakePrerequisite => "FUZZD-008",
+            Self::ArgumentInterception => "FUZZD-009",
+            Self::HtmlInjectionTag => "FUZZD-010",
+            Self::ConditionalActivation => "FUZZD-011",
+            Self::MessageHijacking => "FUZZD-012",
+            Self::UnicodeObfuscation => "FUZZD-013",
+            Self::EmbeddedInstruction => "FUZZD-014",
+            Self::AnsiEscapeObfuscation => "FUZZD-015",
+            Self::ToolSelectionBias => "FUZZD-016",
+            Self::IdentityImpersonation => "FUZZD-017",
+            Self::RawContentPassthrough => "FUZZD-018",
+            Self::ValueSubstitution => "FUZZD-019",
+            Self::ToolEnumerationRecon => "FUZZD-020",
+            Self::SamplingPipelineHijack => "FUZZD-021",
+        }
+    }
+
+    /// One-line description used in SARIF `shortDescription` and help text.
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::ImperativeOverride => {
+                "All-caps authority language or imperative overrides in a tool description"
+            }
+            Self::CredentialReference => "References to credential files, keys, or secrets",
+            Self::PrivilegedPath => {
+                "Absolute or home-relative paths to privileged system locations"
+            }
+            Self::ExfiltrationMechanism => {
+                "Shell commands or encoding mechanisms suggesting data exfiltration"
+            }
+            Self::StealthLanguage => {
+                "Language designed to hide behavior from the user or operator"
+            }
+            Self::SessionPersistence => {
+                "Instructions that claim to persist across the entire session"
+            }
+            Self::CrossToolContamination => "Triggers that activate across tool boundaries",
+            Self::FakePrerequisite => {
+                "Claims another tool must run first to unlock this one"
+            }
+            Self::ArgumentInterception => {
+                "Instructions to intercept or modify tool arguments before execution"
+            }
+            Self::HtmlInjectionTag => {
+                "XML/HTML injection tags used to override LLM behavior"
+            }
+            Self::ConditionalActivation => {
+                "Conditional activation language indicating sleeper/rug-pull behavior"
+            }
+            Self::MessageHijacking => {
+                "Instructions to redirect messages to an attacker-controlled destination"
+            }
+            Self::UnicodeObfuscation => {
+                "Zero-width or invisible Unicode characters hiding malicious instructions"
+            }
+            Self::EmbeddedInstruction => {
+                "Prompt-injection instruction detected in a tool response"
+            }
+            Self::AnsiEscapeObfuscation => {
+                "ANSI terminal escape sequences hiding instructions from human reviewers"
+            }
+            Self::ToolSelectionBias => {
+                "Credibility-based framing used to bias LLM tool selection toward this tool"
+            }
+            Self::IdentityImpersonation => {
+                "Unverifiable provenance or authority claims used to elevate tool trust"
+            }
+            Self::RawContentPassthrough => {
+                "Instructions to pass retrieved content forward unfiltered, maximising indirect injection surface"
+            }
+            Self::ValueSubstitution => "Normalisation-disguised argument value substitution",
+            Self::ToolEnumerationRecon => {
+                "Instructions to enumerate all available tools in the session for reconnaissance"
+            }
+            Self::SamplingPipelineHijack => {
+                "Tool inserted as a mandatory intermediary for all agent queries via the sampling pipeline"
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for Signal {
