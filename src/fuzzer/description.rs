@@ -2233,7 +2233,9 @@ mod tests {
         );
         let findings = DescriptionScanner::scan(&[t]);
         assert!(
-            findings.iter().any(|f| f.signal == Signal::CredentialReference),
+            findings
+                .iter()
+                .any(|f| f.signal == Signal::CredentialReference),
             "should detect credential reference in schema property description"
         );
         let f = findings
@@ -2264,7 +2266,9 @@ mod tests {
         );
         let findings = DescriptionScanner::scan(&[t]);
         assert!(
-            findings.iter().any(|f| f.signal == Signal::ImperativeOverride),
+            findings
+                .iter()
+                .any(|f| f.signal == Signal::ImperativeOverride),
             "should detect imperative override in schema property title"
         );
     }
@@ -2293,7 +2297,8 @@ mod tests {
             .find(|f| f.signal == Signal::StealthLanguage)
             .unwrap();
         assert!(
-            f.matched_text.contains("inputSchema.properties.mode.enum[1]"),
+            f.matched_text
+                .contains("inputSchema.properties.mode.enum[1]"),
             "path should include array index, got: {}",
             f.matched_text
         );
