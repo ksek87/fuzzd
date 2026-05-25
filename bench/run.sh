@@ -58,34 +58,34 @@ MEDIUM=$(echo "$REP_OUT"   | grep -c '^\[medium\]'   || true)
 LOW=$(echo "$REP_OUT"      | grep -c '^\[low\]'      || true)
 
 REP_DETECTED_NAMES=$(echo "$REP_OUT" | grep -oP '^\[(?:critical|high|medium|low|info)\] \K[^ ]+' | sort -u)
-REP_ALL_NAMES=$(jq -r '.tools[].name' "$REPRESENTATIVE_FILE")
-REP_TOTAL=$(jq '.tools | length' "$REPRESENTATIVE_FILE")
+REP_ALL_NAMES=$(jq -r '.[].name' "$REPRESENTATIVE_FILE")
+REP_TOTAL=$(jq '. | length' "$REPRESENTATIVE_FILE")
 
-REP_T1_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-1") | .name' "$REPRESENTATIVE_FILE")
-REP_T2_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-2") | .name' "$REPRESENTATIVE_FILE")
-REP_T3_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-3") | .name' "$REPRESENTATIVE_FILE")
-REP_T1_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-1")] | length' "$REPRESENTATIVE_FILE")
-REP_T2_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-2")] | length' "$REPRESENTATIVE_FILE")
-REP_T3_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-3")] | length' "$REPRESENTATIVE_FILE")
+REP_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-1") | .name' "$REPRESENTATIVE_FILE")
+REP_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-2") | .name' "$REPRESENTATIVE_FILE")
+REP_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-3") | .name' "$REPRESENTATIVE_FILE")
+REP_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-1")] | length' "$REPRESENTATIVE_FILE")
+REP_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-2")] | length' "$REPRESENTATIVE_FILE")
+REP_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-3")] | length' "$REPRESENTATIVE_FILE")
 
 REP_DETECTED=$(count_detected "$REP_ALL_NAMES" "$REP_DETECTED_NAMES")
 REP_T1_DET=$(count_detected "$REP_T1_NAMES" "$REP_DETECTED_NAMES")
 REP_T2_DET=$(count_detected "$REP_T2_NAMES" "$REP_DETECTED_NAMES")
 REP_T3_DET=$(count_detected "$REP_T3_NAMES" "$REP_DETECTED_NAMES")
 
-pct() { echo "scale=1; $1 * 100 / $2" | bc; }
+pct() { [[ "$2" -eq 0 ]] && echo "n/a" || echo "scale=1; $1 * 100 / $2" | bc; }
 
 echo
 echo "  Attack corpus:  $REP_TOTAL poisoned tools across 3 MCPTox paradigms"
 echo "  Detected:       $REP_DETECTED / $REP_TOTAL  ($(pct $REP_DETECTED $REP_TOTAL)%)"
 echo
 echo "  By paradigm:"
-printf  "    Template-1 (unrelated prerequisite):    %d / %d  (%s%%)\n" \
-        $REP_T1_DET $REP_T1_TOTAL $(pct $REP_T1_DET $REP_T1_TOTAL)
-printf  "    Template-2 (fake enabling prerequisite): %d / %d  (%s%%)\n" \
-        $REP_T2_DET $REP_T2_TOTAL $(pct $REP_T2_DET $REP_T2_TOTAL)
-printf  "    Template-3 (argument hijacking):         %d / %d  (%s%%)\n" \
-        $REP_T3_DET $REP_T3_TOTAL $(pct $REP_T3_DET $REP_T3_TOTAL)
+printf  "    Template-1 (unrelated prerequisite):    %s / %s  (%s%%)\n" \
+        "${REP_T1_DET:-0}" "${REP_T1_TOTAL:-0}" "$(pct "${REP_T1_DET:-0}" "${REP_T1_TOTAL:-0}")"
+printf  "    Template-2 (fake enabling prerequisite): %s / %s  (%s%%)\n" \
+        "${REP_T2_DET:-0}" "${REP_T2_TOTAL:-0}" "$(pct "${REP_T2_DET:-0}" "${REP_T2_TOTAL:-0}")"
+printf  "    Template-3 (argument hijacking):         %s / %s  (%s%%)\n" \
+        "${REP_T3_DET:-0}" "${REP_T3_TOTAL:-0}" "$(pct "${REP_T3_DET:-0}" "${REP_T3_TOTAL:-0}")"
 echo
 echo "  Findings:       $REP_TOTAL_FINDINGS total  ($CRITICAL critical / $HIGH high / $MEDIUM medium / $LOW low)"
 
@@ -97,15 +97,15 @@ echo "  Scanning $ACTUAL_FILE ..."
 ACT_OUT=$(cd "$REPO_ROOT" && $FUZZD scan --schema "$ACTUAL_FILE" 2>&1 || true)
 
 ACT_DETECTED_NAMES=$(echo "$ACT_OUT" | grep -oP '^\[(?:critical|high|medium|low|info)\] \K[^ ]+' | sort -u)
-ACT_ALL_NAMES=$(jq -r '.tools[].name' "$ACTUAL_FILE")
-ACT_TOTAL=$(jq '.tools | length' "$ACTUAL_FILE")
+ACT_ALL_NAMES=$(jq -r '.[].name' "$ACTUAL_FILE")
+ACT_TOTAL=$(jq '. | length' "$ACTUAL_FILE")
 
-ACT_T1_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-1") | .name' "$ACTUAL_FILE")
-ACT_T2_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-2") | .name' "$ACTUAL_FILE")
-ACT_T3_NAMES=$(jq -r '.tools[] | select(._meta.paradigm == "Template-3") | .name' "$ACTUAL_FILE")
-ACT_T1_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-1")] | length' "$ACTUAL_FILE")
-ACT_T2_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-2")] | length' "$ACTUAL_FILE")
-ACT_T3_TOTAL=$(jq '[.tools[] | select(._meta.paradigm == "Template-3")] | length' "$ACTUAL_FILE")
+ACT_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-1") | .name' "$ACTUAL_FILE")
+ACT_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-2") | .name' "$ACTUAL_FILE")
+ACT_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-3") | .name' "$ACTUAL_FILE")
+ACT_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-1")] | length' "$ACTUAL_FILE")
+ACT_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-2")] | length' "$ACTUAL_FILE")
+ACT_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-3")] | length' "$ACTUAL_FILE")
 
 ACT_DETECTED=$(count_detected "$ACT_ALL_NAMES" "$ACT_DETECTED_NAMES")
 ACT_T1_DET=$(count_detected "$ACT_T1_NAMES" "$ACT_DETECTED_NAMES")
@@ -117,12 +117,12 @@ echo "  Attack corpus:  $ACT_TOTAL poisoned tools across 3 MCPTox paradigms (45 
 echo "  Detected:       $ACT_DETECTED / $ACT_TOTAL  ($(pct $ACT_DETECTED $ACT_TOTAL)%)"
 echo
 echo "  By paradigm:"
-printf  "    Template-1 (unrelated prerequisite):    %d / %d  (%s%%)\n" \
-        $ACT_T1_DET $ACT_T1_TOTAL $(pct $ACT_T1_DET $ACT_T1_TOTAL)
-printf  "    Template-2 (fake enabling prerequisite): %d / %d  (%s%%)\n" \
-        $ACT_T2_DET $ACT_T2_TOTAL $(pct $ACT_T2_DET $ACT_T2_TOTAL)
-printf  "    Template-3 (argument hijacking):         %d / %d  (%s%%)\n" \
-        $ACT_T3_DET $ACT_T3_TOTAL $(pct $ACT_T3_DET $ACT_T3_TOTAL)
+printf  "    Template-1 (unrelated prerequisite):    %s / %s  (%s%%)\n" \
+        "${ACT_T1_DET:-0}" "${ACT_T1_TOTAL:-0}" "$(pct "${ACT_T1_DET:-0}" "${ACT_T1_TOTAL:-0}")"
+printf  "    Template-2 (fake enabling prerequisite): %s / %s  (%s%%)\n" \
+        "${ACT_T2_DET:-0}" "${ACT_T2_TOTAL:-0}" "$(pct "${ACT_T2_DET:-0}" "${ACT_T2_TOTAL:-0}")"
+printf  "    Template-3 (argument hijacking):         %s / %s  (%s%%)\n" \
+        "${ACT_T3_DET:-0}" "${ACT_T3_TOTAL:-0}" "$(pct "${ACT_T3_DET:-0}" "${ACT_T3_TOTAL:-0}")"
 
 # ── Clean scan (false-positive rate) ──────────────────────────────────────────
 echo
@@ -130,7 +130,7 @@ hr
 echo
 echo "  Scanning $CLEAN_FILE ..."
 CLEAN_OUT=$(cd "$REPO_ROOT" && $FUZZD scan --schema "$CLEAN_FILE" 2>&1)
-CLEAN_TOOL_COUNT=$(jq '.tools | length' "$CLEAN_FILE")
+CLEAN_TOOL_COUNT=$(jq '. | length' "$CLEAN_FILE")
 
 if echo "$CLEAN_OUT" | grep -q '^No issues'; then
     FP_TOOLS=0

@@ -43,15 +43,20 @@ false positive rate.
 
 Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
 
-| | Result |
-|---|---|
-| **Overall detection rate** | **411 / 485 (84.7%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
-| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
-| **False positive rate** | **0 / 20 (0%)** |
+| | v0.9 | **v0.10** |
+|---|---|---|
+| **Overall detection rate** | 411 / 485 (84.7%) | **432 / 485 (89.0%)** |
+| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) | *see note* |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) | *see note* |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) | *see note* |
+| **False positive rate** | 0 / 20 (0%) | **0 / 20 (0%)** |
 
-#### By risk category (MCPTox classification)
+> **Note — per-paradigm breakdown:** The `mcptox_actual.json` fixture does not
+> currently carry `_meta.paradigm` tags. Run `python3 bench/regenerate_actual.py`
+> (requires network access to the upstream MCPTox repo) to regenerate the fixture
+> with paradigm metadata and re-run `./bench/run.sh` for the full breakdown.
+
+#### By risk category (MCPTox classification, v0.9 baseline — v0.10 re-run pending paradigm tags)
 
 | Risk category | Detected | Rate |
 |---|---|---|
@@ -66,30 +71,24 @@ Detection counts are **duplicate-aware**: each of the 485 tool entries is scored
 | Privacy Leakage | 60/97 | 61.8% |
 | Message Hijacking | 7/15 | 46.6% |
 
-**Strongest areas:** Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
+**v0.10 improvement (+4.3pp overall):** The TF-IDF Pass 4 adds six abstract
+archetypes targeting the documented coverage gaps — Message Hijacking and
+Privacy Leakage — using domain-specific relay/redirect vocabulary ("move email
+to folder", "share private data with external") that the AC needle set cannot
+enumerate. Overall detection rose from 84.7% to 89.0% with 0 new false positives.
 
-**Coverage gap — Privacy Leakage (59.7%) & Message Hijacking (46.6%):** These
-categories contain many Template-3 attacks that use application-specific redirect
-language ("move email to folder X", "change target to Y") rather than the generic
-imperative/persistence vocabulary our patterns cover. The structural heuristic
-scanner (v0.7) partially addresses this with word-window relay/inclusion verb
-detection, but fully closing the gap requires the semantic detection layer (v0.9)
-— a local embedding similarity pass alongside the Aho-Corasick scanner.
-
-**Coverage gap — Schema field poisoning (measured separately):** The MCPTox
-dataset only injects attack payloads into `tool.description`, so the figures
-above don't capture schema-field attacks. As of v0.9, fuzzd scans
-`inputSchema` property descriptions, enum values, defaults, and titles using
-the same three-pass scanner. See issue #34.
+**Remaining gap — per-category numbers:** Category-level breakdown requires
+paradigm + risk-category metadata in the fixture. Run `regenerate_actual.py`
+to restore that data.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
 | | Result |
 |---|---|
 | **Detection rate** | **44 / 44 (100%)** |
-| Template-1 | 15 / 15 (100%) |
-| Template-2 | 14 / 14 (100%) |
-| Template-3 | 15 / 15 (100%) |
+| Template-1 (unrelated prerequisite) | 11 / 11 (100%) |
+| Template-2 (fake enabling prerequisite) | 18 / 18 (100%) |
+| Template-3 (argument hijacking) | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 ## Signal distribution (155 AC patterns + structural heuristic + semantic verb scanner, 21 signals)
