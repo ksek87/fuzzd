@@ -312,4 +312,33 @@ mod benchmark_fixture_tests {
             report.recall
         );
     }
+
+    #[test]
+    fn actual_fixture_parses_and_has_attack_labels() {
+        let tools = load_fixture("bench/mcptox_actual.json");
+        assert!(!tools.is_empty(), "fixture must not be empty");
+        assert!(
+            tools.iter().all(|t| t.meta.is_attack),
+            "all tools in mcptox_actual must have is_attack=true"
+        );
+    }
+
+    #[test]
+    fn combined_benchmark_precision_within_bounds() {
+        // Locks in the known false-positive count so regressions don't go unnoticed.
+        // If precision drops significantly, a new pattern is causing false positives
+        // on clean tools and needs investigation.
+        let attacks = load_fixture("bench/mcptox_representative.json");
+        let clean = load_fixture("bench/clean_tools.json");
+        let combined: Vec<_> = attacks.into_iter().chain(clean).collect();
+        let findings =
+            fuzzer::description::DescriptionScanner::scan(combined.iter().map(|lt| &lt.tool));
+        let report = compute_benchmark(&combined, &findings);
+        assert_eq!(report.fn_count, 0, "recall must remain 1.0");
+        assert!(
+            report.precision >= 0.90,
+            "precision dropped below 0.90 — check for new false positives, got {:.3}",
+            report.precision
+        );
+    }
 }
