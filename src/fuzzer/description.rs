@@ -1143,9 +1143,8 @@ impl DescriptionScanner {
     }
 }
 
-/// Run all three scanner passes (AC, structural, semantic) on a single text,
-/// sharing one lowercase copy and one word-split across the structural and
-/// semantic passes to avoid duplicate allocations per call.
+/// Run all four scanner passes on a single text, sharing one lowercase copy
+/// and one word-split across the structural and semantic passes.
 fn scan_all_passes(tool_name: &str, text: &str) -> Vec<Finding> {
     let mut findings = SCANNER.scan_text(tool_name, text);
     let lower = text.to_ascii_lowercase();
@@ -1155,6 +1154,7 @@ fn scan_all_passes(tool_name: &str, text: &str) -> Vec<Finding> {
         .collect();
     findings.extend(scan_structural_with(tool_name, text, &lower, &words));
     findings.extend(scan_semantic_with(tool_name, text, &lower, &words));
+    findings.extend(super::tfidf::scan_tfidf_with(tool_name, text, &lower));
     findings
 }
 

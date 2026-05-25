@@ -2,6 +2,7 @@ pub mod argument;
 pub mod description;
 pub mod payloads;
 pub mod response;
+pub(crate) mod tfidf;
 
 use std::collections::HashSet;
 use std::sync::OnceLock;
