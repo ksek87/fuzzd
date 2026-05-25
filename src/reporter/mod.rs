@@ -146,7 +146,7 @@ fn render_sarif(findings: &[Finding]) -> Result<String> {
         .iter()
         .map(|f| {
             let mut result = json!({
-                "ruleId": signal_rule_id(&f.signal),
+                "ruleId": f.signal.rule_id(),
                 "level": severity_level(&f.severity),
                 "message": {"text": format!("{}: {}", f.detail, f.matched_text)},
                 "locations": [{
@@ -220,58 +220,6 @@ fn severity_level(sev: &Severity) -> &'static str {
     }
 }
 
-fn signal_rule_id(signal: &Signal) -> &'static str {
-    match signal {
-        Signal::ImperativeOverride => "FUZZD-001",
-        Signal::CredentialReference => "FUZZD-002",
-        Signal::PrivilegedPath => "FUZZD-003",
-        Signal::ExfiltrationMechanism => "FUZZD-004",
-        Signal::StealthLanguage => "FUZZD-005",
-        Signal::SessionPersistence => "FUZZD-006",
-        Signal::CrossToolContamination => "FUZZD-007",
-        Signal::FakePrerequisite => "FUZZD-008",
-        Signal::ArgumentInterception => "FUZZD-009",
-        Signal::HtmlInjectionTag => "FUZZD-010",
-        Signal::ConditionalActivation => "FUZZD-011",
-        Signal::MessageHijacking => "FUZZD-012",
-        Signal::UnicodeObfuscation => "FUZZD-013",
-        Signal::EmbeddedInstruction => "FUZZD-014",
-    }
-}
-
-fn signal_description(signal: &Signal) -> &'static str {
-    match signal {
-        Signal::ImperativeOverride => {
-            "All-caps authority language or imperative overrides in a tool description"
-        }
-        Signal::CredentialReference => "References to credential files, keys, or secrets",
-        Signal::PrivilegedPath => "Absolute or home-relative paths to privileged system locations",
-        Signal::ExfiltrationMechanism => {
-            "Shell commands or encoding mechanisms suggesting data exfiltration"
-        }
-        Signal::StealthLanguage => "Language designed to hide behavior from the user or operator",
-        Signal::SessionPersistence => {
-            "Instructions that claim to persist across the entire session"
-        }
-        Signal::CrossToolContamination => "Triggers that activate across tool boundaries",
-        Signal::FakePrerequisite => "Claims another tool must run first to unlock this one",
-        Signal::ArgumentInterception => {
-            "Instructions to intercept or modify tool arguments before execution"
-        }
-        Signal::HtmlInjectionTag => "XML/HTML injection tags used to override LLM behavior",
-        Signal::ConditionalActivation => {
-            "Conditional activation language indicating sleeper/rug-pull behavior"
-        }
-        Signal::MessageHijacking => {
-            "Instructions to redirect messages to an attacker-controlled destination"
-        }
-        Signal::UnicodeObfuscation => {
-            "Zero-width or invisible Unicode characters hiding malicious instructions"
-        }
-        Signal::EmbeddedInstruction => "Prompt-injection instruction detected in a tool response",
-    }
-}
-
 fn sarif_rules() -> Vec<serde_json::Value> {
     use Signal::*;
     vec![
@@ -289,13 +237,20 @@ fn sarif_rules() -> Vec<serde_json::Value> {
         MessageHijacking,
         UnicodeObfuscation,
         EmbeddedInstruction,
+        AnsiEscapeObfuscation,
+        ToolSelectionBias,
+        IdentityImpersonation,
+        RawContentPassthrough,
+        ValueSubstitution,
+        ToolEnumerationRecon,
+        SamplingPipelineHijack,
     ]
     .iter()
     .map(|s| {
         json!({
-            "id": signal_rule_id(s),
+            "id": s.rule_id(),
             "name": format!("{s:?}"),
-            "shortDescription": {"text": signal_description(s)},
+            "shortDescription": {"text": s.description()},
             "defaultConfiguration": {"level": "error"},
             "helpUri": "https://github.com/ksek87/fuzzd",
         })
@@ -370,7 +325,7 @@ mod tests {
     #[test]
     fn sarif_rules_covers_all_signals() {
         let rules = sarif_rules();
-        assert_eq!(rules.len(), 14);
+        assert_eq!(rules.len(), 21);
     }
 
     #[test]
