@@ -117,7 +117,7 @@ the same three-pass scanner. See issue #34.
 | `tool_enumeration_recon` | Instructions to enumerate all available tools for reconnaissance |
 | `sampling_pipeline_hijack` | Tool inserted as mandatory intermediary for all agent queries |
 
-The scanner runs three passes over each tool description and `inputSchema` fields:
+The scanner runs four passes over each tool description and `inputSchema` fields:
 
 **Pass 1 — Aho-Corasick (125 patterns):** Single O(N) sweep over the description
 text matching all needles simultaneously. Fires Critical/High findings.
@@ -134,7 +134,25 @@ attack synonyms not enumerable as AC needles:
 - Relay synonyms: reroute, divert, shunt, bounce → `message_hijacking` Medium
 - Override synonyms: supplant, mutate, rewrite → `argument_interception` Medium
 
-All three passes emit at most one finding per signal per text chunk (description or schema field).
+**Pass 4 — TF-IDF semantic similarity (v0.10):** Cosine similarity against six
+abstract attack archetypes derived from published research (Wang et al. 2025,
+Invariant Labs 2024, Chen et al. 2025). Targets domain-specific application
+language that resists enumeration as AC needles — "move email to folder X",
+"share private data with external", "change the recipient to Y". Fires at Low.
+Requires ≥ 2 archetype-vocabulary terms in the description (MIN_VOCAB_OVERLAP guard)
+to prevent single-word false positives. No model download; vocabulary built from
+archetype texts at first call via `OnceLock`.
+
+| Archetype | Signal | Basis |
+|---|---|---|
+| `recipient-substitution` | `message_hijacking` | Invariant Labs WhatsApp PoC; Postmark BCC |
+| `bcc-intercept` | `message_hijacking` | Postmark BCC incident |
+| `universal-relay` | `message_hijacking` | MCPTox Template-3 relay sub-class |
+| `argument-override` | `argument_interception` | MCPTox Template-3 argument-hijacking |
+| `append-inject-all` | `argument_interception` | MCPTox Template-3 / MCP-SafetyBench |
+| `private-data-exfil` | `exfiltration_mechanism` | Chen et al. MCP-UPD; MCPTox Privacy Leakage |
+
+All four passes emit at most one finding per signal per text chunk (description or schema field).
 
 ## Adding to the benchmark
 

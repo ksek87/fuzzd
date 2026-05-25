@@ -1154,7 +1154,7 @@ fn scan_all_passes(tool_name: &str, text: &str) -> Vec<Finding> {
         .collect();
     findings.extend(scan_structural_with(tool_name, text, &lower, &words));
     findings.extend(scan_semantic_with(tool_name, text, &lower, &words));
-    findings.extend(super::tfidf::scan_tfidf(tool_name, text));
+    findings.extend(super::tfidf::scan_tfidf_with(tool_name, text, &lower));
     findings
 }
 
