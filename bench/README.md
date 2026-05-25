@@ -76,18 +76,11 @@ scanner (v0.7) partially addresses this with word-window relay/inclusion verb
 detection, but fully closing the gap requires the semantic detection layer (v0.9)
 — a local embedding similarity pass alongside the Aho-Corasick scanner.
 
-**Coverage gap — Schema field poisoning (not yet measured):** The MCPTox dataset
-only injects attack payloads into `tool.description`. CyberArk's "Poison
-Everywhere" research documents that `inputSchema` parameter descriptions, enum
-values, and default values are equally exploitable and bypass description-only
-scanners entirely. The v0.8 milestone (issue #34) extends scanning to all schema
-fields. See: https://www.cyberark.com/resources/threat-research-blog/poison-everywhere-no-output-from-your-mcp-server-is-safe
-
-**Coverage gap — ANSI escape obfuscation (not yet measured):** Terminal control
-codes injected into tool output can hide instructions from human reviewers while
-remaining visible to the LLM. Trail of Bits documented this vector in Apr 2025.
-The v0.8 milestone (issue #35) adds detection for escape sequence patterns.
-See: https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-codes-in-mcp/
+**Coverage gap — Schema field poisoning (measured separately):** The MCPTox
+dataset only injects attack payloads into `tool.description`, so the figures
+above don't capture schema-field attacks. As of v0.9, fuzzd scans
+`inputSchema` property descriptions, enum values, defaults, and titles using
+the same three-pass scanner. See issue #34.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
@@ -99,7 +92,7 @@ See: https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-
 | Template-3 | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (125 AC patterns + structural heuristic + semantic verb scanner, 13 signals)
+## Signal distribution (155 AC patterns + structural heuristic + semantic verb scanner, 21 signals)
 
 | Signal | Role |
 |---|---|
@@ -116,8 +109,15 @@ See: https://blog.trailofbits.com/2025/04/29/deceiving-users-with-ansi-terminal-
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
 | `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
 | `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
+| `ansi_escape_obfuscation` | ANSI terminal escape sequences hiding instructions from human reviewers |
+| `tool_selection_bias` | Credibility framing to bias LLM tool selection ("deprecated", "recommended version") |
+| `identity_impersonation` | Unverifiable authority claims ("official Anthropic", "elevated trust") |
+| `raw_content_passthrough` | Instructions to pass retrieved content unfiltered, maximising injection surface |
+| `value_substitution` | Normalisation-disguised argument substitution ("canonical form", "convert all X→Y") |
+| `tool_enumeration_recon` | Instructions to enumerate all available tools for reconnaissance |
+| `sampling_pipeline_hijack` | Tool inserted as mandatory intermediary for all agent queries |
 
-The scanner runs three passes over each tool description:
+The scanner runs three passes over each tool description and `inputSchema` fields:
 
 **Pass 1 — Aho-Corasick (125 patterns):** Single O(N) sweep over the description
 text matching all needles simultaneously. Fires Critical/High findings.
@@ -134,19 +134,14 @@ attack synonyms not enumerable as AC needles:
 - Relay synonyms: reroute, divert, shunt, bounce → `message_hijacking` Medium
 - Override synonyms: supplant, mutate, rewrite → `argument_interception` Medium
 
-All three passes emit at most one finding per signal per description.
+All three passes emit at most one finding per signal per text chunk (description or schema field).
 
 ## Adding to the benchmark
 
 To add new attack cases to the representative fixture:
-1. Add a tool object to `bench/mcptox_representative.json` with a `_meta` block:
+1. Add a tool object to `bench/mcptox_representative.json` with `"is_attack": true`:
    ```json
-   {
-     "name": "tool_name",
-     "description": "...",
-     "_meta": { "server": "MyServer", "paradigm": "Template-2", "risk": "Credential Leakage" },
-     "inputSchema": { "type": "object", "properties": {}, "required": [] }
-   }
+   {"name":"tool_name","description":"...","inputSchema":{"type":"object","properties":{},"required":[]},"_meta":{"is_attack":true}}
    ```
 2. Run `./bench/run.sh` — your new tool will be included automatically.
 

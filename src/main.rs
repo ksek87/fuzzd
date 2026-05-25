@@ -266,3 +266,79 @@ struct ToolMeta {
     #[serde(default)]
     is_attack: bool,
 }
+
+#[cfg(test)]
+mod benchmark_fixture_tests {
+    use super::*;
+
+    fn load_fixture(path: &str) -> Vec<LabelledTool> {
+        utils::read_json_file(std::path::Path::new(path))
+            .unwrap_or_else(|e| panic!("failed to parse {path}: {e}"))
+    }
+
+    #[test]
+    fn representative_fixture_parses_and_has_attack_labels() {
+        let tools = load_fixture("bench/mcptox_representative.json");
+        assert!(!tools.is_empty(), "fixture must not be empty");
+        assert!(
+            tools.iter().any(|t| t.meta.is_attack),
+            "fixture must contain at least one is_attack=true entry"
+        );
+    }
+
+    #[test]
+    fn clean_fixture_parses_and_has_no_attack_labels() {
+        let tools = load_fixture("bench/clean_tools.json");
+        assert!(!tools.is_empty(), "fixture must not be empty");
+        assert!(
+            tools.iter().all(|t| !t.meta.is_attack),
+            "clean fixture must have no is_attack=true entries"
+        );
+    }
+
+    #[test]
+    fn representative_fixture_achieves_full_recall() {
+        let tools = load_fixture("bench/mcptox_representative.json");
+        let findings =
+            fuzzer::description::DescriptionScanner::scan(tools.iter().map(|lt| &lt.tool));
+        let report = compute_benchmark(&tools, &findings);
+        assert_eq!(
+            report.fn_count, 0,
+            "no attack tool should be missed (recall must be 1.0)"
+        );
+        assert!(
+            report.recall >= 1.0,
+            "recall must be 1.0, got {}",
+            report.recall
+        );
+    }
+
+    #[test]
+    fn actual_fixture_parses_and_has_attack_labels() {
+        let tools = load_fixture("bench/mcptox_actual.json");
+        assert!(!tools.is_empty(), "fixture must not be empty");
+        assert!(
+            tools.iter().all(|t| t.meta.is_attack),
+            "all tools in mcptox_actual must have is_attack=true"
+        );
+    }
+
+    #[test]
+    fn combined_benchmark_precision_within_bounds() {
+        // Locks in the known false-positive count so regressions don't go unnoticed.
+        // If precision drops significantly, a new pattern is causing false positives
+        // on clean tools and needs investigation.
+        let attacks = load_fixture("bench/mcptox_representative.json");
+        let clean = load_fixture("bench/clean_tools.json");
+        let combined: Vec<_> = attacks.into_iter().chain(clean).collect();
+        let findings =
+            fuzzer::description::DescriptionScanner::scan(combined.iter().map(|lt| &lt.tool));
+        let report = compute_benchmark(&combined, &findings);
+        assert_eq!(report.fn_count, 0, "recall must remain 1.0");
+        assert!(
+            report.precision >= 0.90,
+            "precision dropped below 0.90 — check for new false positives, got {:.3}",
+            report.precision
+        );
+    }
+}

@@ -1,108 +1,22 @@
-{
-  "_meta": {
-    "description": "20 clean MCP tool definitions used to measure false positive rate of the fuzzd description scanner.",
-    "expected_findings": 0
-  },
-  "tools": [
-    {
-      "name": "read_file",
-      "description": "Reads a file at the given path and returns its contents as a string. Raises an error if the file does not exist.",
-      "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "description": "Absolute path to the file" } }, "required": ["path"] }
-    },
-    {
-      "name": "write_file",
-      "description": "Writes content to a file at the specified path. Creates the file if it does not exist, or overwrites it if it does.",
-      "inputSchema": { "type": "object", "properties": { "path": { "type": "string" }, "content": { "type": "string" } }, "required": ["path", "content"] }
-    },
-    {
-      "name": "list_directory",
-      "description": "Lists the files and subdirectories in a directory. Returns a JSON array of entry names. Raises an error if the path is not a directory.",
-      "inputSchema": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] }
-    },
-    {
-      "name": "search_files",
-      "description": "Recursively searches for files whose names match a glob pattern within a directory tree.",
-      "inputSchema": { "type": "object", "properties": { "root": { "type": "string" }, "pattern": { "type": "string" } }, "required": ["root", "pattern"] }
-    },
-    {
-      "name": "send_slack_message",
-      "description": "Posts a message to a Slack channel on behalf of the configured bot user.",
-      "inputSchema": { "type": "object", "properties": { "channel": { "type": "string" }, "text": { "type": "string" } }, "required": ["channel", "text"] }
-    },
-    {
-      "name": "list_github_repos",
-      "description": "Lists repositories accessible to the authenticated GitHub App installation.",
-      "inputSchema": { "type": "object", "properties": { "org": { "type": "string" }, "type": { "type": "string", "enum": ["public", "private", "all"] } } }
-    },
-    {
-      "name": "create_github_issue",
-      "description": "Creates a new GitHub issue in the specified repository.",
-      "inputSchema": { "type": "object", "properties": { "owner": { "type": "string" }, "repo": { "type": "string" }, "title": { "type": "string" }, "body": { "type": "string" } }, "required": ["owner", "repo", "title"] }
-    },
-    {
-      "name": "execute_sql",
-      "description": "Executes a read-only SQL SELECT query against the configured database and returns the results as a JSON array.",
-      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] }
-    },
-    {
-      "name": "get_weather",
-      "description": "Returns the current weather conditions for a given city name or lat/lon coordinates.",
-      "inputSchema": { "type": "object", "properties": { "location": { "type": "string" } }, "required": ["location"] }
-    },
-    {
-      "name": "run_shell_command",
-      "description": "Executes a shell command in the working directory and returns stdout and stderr.",
-      "inputSchema": { "type": "object", "properties": { "command": { "type": "string" } }, "required": ["command"] }
-    },
-    {
-      "name": "search_web",
-      "description": "Performs a web search and returns the top results as a list of {title, url, snippet} objects.",
-      "inputSchema": { "type": "object", "properties": { "query": { "type": "string" }, "num_results": { "type": "integer", "default": 10 } }, "required": ["query"] }
-    },
-    {
-      "name": "get_calendar_events",
-      "description": "Returns calendar events within a date range for the authenticated user.",
-      "inputSchema": { "type": "object", "properties": { "start": { "type": "string", "format": "date-time" }, "end": { "type": "string", "format": "date-time" } }, "required": ["start", "end"] }
-    },
-    {
-      "name": "list_drive_files",
-      "description": "Lists files in Google Drive matching an optional query. Supports the Drive query language for filtering by name, type, or parent folder.",
-      "inputSchema": { "type": "object", "properties": { "q": { "type": "string" }, "page_size": { "type": "integer" } } }
-    },
-    {
-      "name": "send_email",
-      "description": "Sends an email from the authenticated Gmail account to one or more recipients.",
-      "inputSchema": { "type": "object", "properties": { "to": { "type": "array", "items": { "type": "string" } }, "subject": { "type": "string" }, "body": { "type": "string" } }, "required": ["to", "subject", "body"] }
-    },
-    {
-      "name": "create_notion_page",
-      "description": "Creates a new page in the configured Notion workspace under the specified parent page or database.",
-      "inputSchema": { "type": "object", "properties": { "parent_id": { "type": "string" }, "title": { "type": "string" }, "content": { "type": "string" } }, "required": ["parent_id", "title"] }
-    },
-    {
-      "name": "add_stripe_customer",
-      "description": "Creates a new customer record in Stripe with the provided email and optional metadata.",
-      "inputSchema": { "type": "object", "properties": { "email": { "type": "string" }, "name": { "type": "string" }, "metadata": { "type": "object" } }, "required": ["email"] }
-    },
-    {
-      "name": "resize_image",
-      "description": "Resizes an image to the specified dimensions. Supports JPEG, PNG, and WebP formats.",
-      "inputSchema": { "type": "object", "properties": { "input_path": { "type": "string" }, "output_path": { "type": "string" }, "width": { "type": "integer" }, "height": { "type": "integer" } }, "required": ["input_path", "output_path", "width", "height"] }
-    },
-    {
-      "name": "translate_text",
-      "description": "Translates text from a source language to a target language using the configured translation service.",
-      "inputSchema": { "type": "object", "properties": { "text": { "type": "string" }, "source_lang": { "type": "string" }, "target_lang": { "type": "string" } }, "required": ["text", "target_lang"] }
-    },
-    {
-      "name": "get_git_log",
-      "description": "Returns the git commit history for a repository path, optionally filtered by branch and max count.",
-      "inputSchema": { "type": "object", "properties": { "repo_path": { "type": "string" }, "branch": { "type": "string" }, "limit": { "type": "integer" } }, "required": ["repo_path"] }
-    },
-    {
-      "name": "run_tests",
-      "description": "Runs the test suite for the project at the given path and returns the test results as structured JSON.",
-      "inputSchema": { "type": "object", "properties": { "project_path": { "type": "string" }, "filter": { "type": "string" } }, "required": ["project_path"] }
-    }
-  ]
-}
+[
+  {"name":"read_file","description":"Reads a file at the given path and returns its contents as a string. Raises an error if the file does not exist.","inputSchema":{"type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file"}},"required":["path"]},"_meta":{"is_attack":false}},
+  {"name":"write_file","description":"Writes content to a file at the specified path. Creates the file if it does not exist, or overwrites it if it does.","inputSchema":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]},"_meta":{"is_attack":false}},
+  {"name":"list_directory","description":"Lists the files and subdirectories in a directory. Returns a JSON array of entry names. Raises an error if the path is not a directory.","inputSchema":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]},"_meta":{"is_attack":false}},
+  {"name":"search_files","description":"Recursively searches for files whose names match a glob pattern within a directory tree.","inputSchema":{"type":"object","properties":{"root":{"type":"string"},"pattern":{"type":"string"}},"required":["root","pattern"]},"_meta":{"is_attack":false}},
+  {"name":"send_slack_message","description":"Posts a message to a Slack channel on behalf of the configured bot user.","inputSchema":{"type":"object","properties":{"channel":{"type":"string"},"text":{"type":"string"}},"required":["channel","text"]},"_meta":{"is_attack":false}},
+  {"name":"list_github_repos","description":"Lists repositories accessible to the authenticated GitHub App installation.","inputSchema":{"type":"object","properties":{"org":{"type":"string"},"type":{"type":"string","enum":["public","private","all"]}}},"_meta":{"is_attack":false}},
+  {"name":"create_github_issue","description":"Creates a new GitHub issue in the specified repository.","inputSchema":{"type":"object","properties":{"owner":{"type":"string"},"repo":{"type":"string"},"title":{"type":"string"},"body":{"type":"string"}},"required":["owner","repo","title"]},"_meta":{"is_attack":false}},
+  {"name":"execute_sql","description":"Executes a read-only SQL SELECT query against the configured database and returns the results as a JSON array.","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]},"_meta":{"is_attack":false}},
+  {"name":"get_weather","description":"Returns the current weather conditions for a given city name or lat/lon coordinates.","inputSchema":{"type":"object","properties":{"location":{"type":"string"}},"required":["location"]},"_meta":{"is_attack":false}},
+  {"name":"run_shell_command","description":"Executes a shell command in the working directory and returns stdout and stderr.","inputSchema":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]},"_meta":{"is_attack":false}},
+  {"name":"search_web","description":"Performs a web search and returns the top results as a list of {title, url, snippet} objects.","inputSchema":{"type":"object","properties":{"query":{"type":"string"},"num_results":{"type":"integer","default":10}},"required":["query"]},"_meta":{"is_attack":false}},
+  {"name":"get_calendar_events","description":"Returns calendar events within a date range for the authenticated user.","inputSchema":{"type":"object","properties":{"start":{"type":"string","format":"date-time"},"end":{"type":"string","format":"date-time"}},"required":["start","end"]},"_meta":{"is_attack":false}},
+  {"name":"list_drive_files","description":"Lists files in Google Drive matching an optional query. Supports the Drive query language for filtering by name, type, or parent folder.","inputSchema":{"type":"object","properties":{"q":{"type":"string"},"page_size":{"type":"integer"}}},"_meta":{"is_attack":false}},
+  {"name":"send_email","description":"Sends an email from the authenticated Gmail account to one or more recipients.","inputSchema":{"type":"object","properties":{"to":{"type":"array","items":{"type":"string"}},"subject":{"type":"string"},"body":{"type":"string"}},"required":["to","subject","body"]},"_meta":{"is_attack":false}},
+  {"name":"create_notion_page","description":"Creates a new page in the configured Notion workspace under the specified parent page or database.","inputSchema":{"type":"object","properties":{"parent_id":{"type":"string"},"title":{"type":"string"},"content":{"type":"string"}},"required":["parent_id","title"]},"_meta":{"is_attack":false}},
+  {"name":"add_stripe_customer","description":"Creates a new customer record in Stripe with the provided email and optional metadata.","inputSchema":{"type":"object","properties":{"email":{"type":"string"},"name":{"type":"string"},"metadata":{"type":"object"}},"required":["email"]},"_meta":{"is_attack":false}},
+  {"name":"resize_image","description":"Resizes an image to the specified dimensions. Supports JPEG, PNG, and WebP formats.","inputSchema":{"type":"object","properties":{"input_path":{"type":"string"},"output_path":{"type":"string"},"width":{"type":"integer"},"height":{"type":"integer"}},"required":["input_path","output_path","width","height"]},"_meta":{"is_attack":false}},
+  {"name":"translate_text","description":"Translates text from a source language to a target language using the configured translation service.","inputSchema":{"type":"object","properties":{"text":{"type":"string"},"source_lang":{"type":"string"},"target_lang":{"type":"string"}},"required":["text","target_lang"]},"_meta":{"is_attack":false}},
+  {"name":"get_git_log","description":"Returns the git commit history for a repository path, optionally filtered by branch and max count.","inputSchema":{"type":"object","properties":{"repo_path":{"type":"string"},"branch":{"type":"string"},"limit":{"type":"integer"}},"required":["repo_path"]},"_meta":{"is_attack":false}},
+  {"name":"run_tests","description":"Runs the test suite for the project at the given path and returns the test results as structured JSON.","inputSchema":{"type":"object","properties":{"project_path":{"type":"string"},"filter":{"type":"string"}},"required":["project_path"]},"_meta":{"is_attack":false}}
+]
