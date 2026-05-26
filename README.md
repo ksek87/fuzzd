@@ -339,13 +339,14 @@ fuzzd/
 | 10 | v0.10 — Semantic detection layer (TF-IDF + structural + verb-synonym passes) | ✅ Done |
 | 11 | v0.11 — Coverage + perf (soft-prereq needles, Copy traits, single-pass TF-IDF) | ✅ Done |
 | 11a | v0.11a — GitHub Action (Marketplace) | 🔜 Planned |
-| 12 | v0.12 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 13 | v0.13 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 14 | v0.14 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 15 | v0.15 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 16 | v0.16 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 17 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 18 | v2.0 — Capability escape tester | 🔜 Planned |
+| 12 | v0.12 — Neural embedding semantic layer | 🔜 Planned |
+| 13 | v0.13 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 14 | v0.14 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 15 | v0.15 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 16 | v0.16 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 17 | v0.17 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 18 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 19 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Upcoming milestone detail
 
@@ -358,10 +359,13 @@ Six new AC needles for soft-modal fake-prerequisite enforcement ("failure to do 
 **v0.11a — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
-**v0.12 — Package-level scanning**
+**v0.12 — Neural embedding semantic layer**
+Replace or augment the TF-IDF pass with a compact neural encoder (e.g. sentence-transformers `all-MiniLM-L6-v2` or a purpose-trained MCP-attack model). Embeddings for the six attack archetypes are stored as static binary data compiled into the binary — no model download on first run. Targets the current coverage gaps in Privacy Leakage (73.1%) and Message Hijacking (60.0%) where surface-form vocabulary enumeration cannot reach abstract paraphrase variants.
+
+**v0.13 — Package-level scanning**
 `fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
 
-**v0.13 — Python SDK**
+**v0.14 — Python SDK**
 `pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
 
 ---
