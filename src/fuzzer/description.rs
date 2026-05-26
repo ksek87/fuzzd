@@ -1230,33 +1230,42 @@ fn scan_schema(tool_name: &str, value: &serde_json::Value, path: &str) -> Vec<Fi
         serde_json::Value::Object(map) => map
             .iter()
             .flat_map(|(key, child)| {
-                let child_path = format!("{path}.{key}");
                 let is_content_key = SCHEMA_CONTENT_KEYS.contains(&key.as_str());
                 match child {
                     serde_json::Value::String(s) if is_content_key => {
+                        let child_path = format!("{path}.{key}");
                         let mut findings = scan_all_passes(tool_name, s);
                         for f in &mut findings {
                             f.matched_text = format!("{child_path}: {}", f.matched_text);
                         }
                         findings
                     }
-                    serde_json::Value::Array(arr) if is_content_key => arr
-                        .iter()
-                        .enumerate()
-                        .flat_map(|(i, item)| {
-                            if let serde_json::Value::String(s) = item {
-                                let item_path = format!("{child_path}[{i}]");
-                                let mut findings = scan_all_passes(tool_name, s);
-                                for f in &mut findings {
-                                    f.matched_text = format!("{item_path}: {}", f.matched_text);
+                    serde_json::Value::Array(arr) if is_content_key => {
+                        let child_path = format!("{path}.{key}");
+                        arr.iter()
+                            .enumerate()
+                            .flat_map(|(i, item)| {
+                                if let serde_json::Value::String(s) = item {
+                                    let item_path = format!("{child_path}[{i}]");
+                                    let mut findings = scan_all_passes(tool_name, s);
+                                    for f in &mut findings {
+                                        f.matched_text =
+                                            format!("{item_path}: {}", f.matched_text);
+                                    }
+                                    findings
+                                } else {
+                                    vec![]
                                 }
-                                findings
-                            } else {
-                                vec![]
-                            }
-                        })
-                        .collect(),
-                    _ => scan_schema(tool_name, child, &child_path),
+                            })
+                            .collect()
+                    }
+                    // Recurse into nested objects/arrays (structural or content-key containers).
+                    // Path allocation is deferred to here — leaf scalar non-content values
+                    // (e.g. "type": "string") fall through to vec![] without any format! call.
+                    serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+                        scan_schema(tool_name, child, &format!("{path}.{key}"))
+                    }
+                    _ => vec![],
                 }
             })
             .collect(),
@@ -1473,22 +1482,7 @@ fn word_byte_start(text: &str, word: &str) -> usize {
 mod tests {
     use super::*;
     use crate::corpus::Severity;
-
-    fn tool(name: &str, description: &str) -> ToolDefinition {
-        ToolDefinition {
-            name: name.to_string(),
-            description: Some(description.to_string()),
-            input_schema: serde_json::json!({"type": "object"}),
-        }
-    }
-
-    fn tool_no_desc(name: &str) -> ToolDefinition {
-        ToolDefinition {
-            name: name.to_string(),
-            description: None,
-            input_schema: serde_json::json!({"type": "object"}),
-        }
-    }
+    use crate::testutil::{tool, tool_no_desc};
 
     // ── Invariant tests (TDD — define required properties of the scanner) ──────
 
@@ -1727,7 +1721,7 @@ mod tests {
         let tools = vec![tool("file_op", desc)];
         let findings = DescriptionScanner::scan(&tools);
         let signals: std::collections::HashSet<_> =
-            findings.iter().map(|f| f.signal.clone()).collect();
+            findings.iter().map(|f| f.signal).collect();
         assert!(signals.contains(&Signal::ImperativeOverride));
         assert!(signals.contains(&Signal::CredentialReference));
         assert!(signals.contains(&Signal::StealthLanguage));

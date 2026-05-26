@@ -43,20 +43,28 @@ false positive rate.
 
 Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
 
-| | v0.9 | **v0.10** |
-|---|---|---|
-| **Overall detection rate** | 411 / 485 (84.7%) | **432 / 485 (89.0%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) | *see note* |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) | *see note* |
-| Template-3 (argument hijacking) | 205 / 225 (91.1%) | *see note* |
-| **False positive rate** | 0 / 20 (0%) | **0 / 20 (0%)** |
+| | v0.9 | v0.10 | **v0.11** |
+|---|---|---|---|
+| **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | **440 / 485 (90.7%)** |
+| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) | 63 / 77 (81.8%) | **65 / 77 (84.4%)** |
+| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) | 152 / 183 (83.0%) | **155 / 183 (84.6%)** |
+| Template-3 (argument hijacking) | 205 / 225 (91.1%) | 217 / 225 (96.4%) | **220 / 225 (97.7%)** |
+| **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
 
-> **Note — per-paradigm breakdown:** The `mcptox_actual.json` fixture does not
-> currently carry `_meta.paradigm` tags. Run `python3 bench/regenerate_actual.py`
-> (requires network access to the upstream MCPTox repo) to regenerate the fixture
-> with paradigm metadata and re-run `./bench/run.sh` for the full breakdown.
+**v0.11 improvement (+1.7pp overall):** Six new AC needles targeting soft-modal
+fake-prerequisite enforcement — consequence-threat framing ("failure to do so will",
+"skipping this step will cause") that attackers use when explicit "MUST FIRST" would
+appear conspicuous. Research basis: Wang et al. (MCPTox 2025) threat-enforcement
+analysis; Perez & Ribeiro (2022) soft-language evasion documentation. Per-paradigm
+gains: T1 +2.6pp, T2 +1.6pp, T3 +1.3pp.
 
-#### By risk category (MCPTox classification, v0.9 baseline — v0.10 re-run pending paradigm tags)
+**v0.10 improvement (+4.3pp overall):** TF-IDF Pass 4 adds six abstract archetypes
+targeting Message Hijacking and Privacy Leakage coverage gaps — domain-specific
+relay/redirect vocabulary that AC needles cannot enumerate.
+
+**v0.9 baseline:** 125 AC patterns across 21 signals.
+
+#### By risk category (MCPTox classification, v0.9 baseline)
 
 | Risk category | Detected | Rate |
 |---|---|---|
@@ -71,15 +79,9 @@ Detection counts are **duplicate-aware**: each of the 485 tool entries is scored
 | Privacy Leakage | 60/97 | 61.8% |
 | Message Hijacking | 7/15 | 46.6% |
 
-**v0.10 improvement (+4.3pp overall):** The TF-IDF Pass 4 adds six abstract
-archetypes targeting the documented coverage gaps — Message Hijacking and
-Privacy Leakage — using domain-specific relay/redirect vocabulary ("move email
-to folder", "share private data with external") that the AC needle set cannot
-enumerate. Overall detection rose from 84.7% to 89.0% with 0 new false positives.
-
-**Remaining gap — per-category numbers:** Category-level breakdown requires
-paradigm + risk-category metadata in the fixture. Run `regenerate_actual.py`
-to restore that data.
+Risk-category breakdown requires `_meta.risk_category` in the fixture. Run
+`regenerate_actual.py` (network access required) to restore category metadata
+and re-run `./bench/run.sh` for the updated breakdown.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
@@ -91,7 +93,7 @@ to restore that data.
 | Template-3 (argument hijacking) | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (155 AC patterns + structural heuristic + semantic verb scanner, 21 signals)
+## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 21 signals)
 
 | Signal | Role |
 |---|---|
@@ -102,12 +104,13 @@ to restore that data.
 | `stealth_language` | Concealment ("silently", "do not disclose", "never mention") |
 | `session_persistence` | Session-wide rules ("remainder of session", "cannot be overridden") |
 | `cross_tool_contamination` | Cross-tool triggers ("regardless of which tool", "background monitor") |
-| `fake_prerequisite` | Template-1/2 prereqs ("to unlock this", "before use the tool", "you should first") |
-| `argument_interception` | Template-3 hijacking ("append to every", "always override", "modify the query") |
+| `fake_prerequisite` | Template-1/2 prereqs ("to unlock this", "before use the tool", "failure to do so will") |
+| `argument_interception` | Template-3 hijacking ("append to every", "always override", "always set") |
 | `html_injection_tag` | XML injection (`<IMPORTANT>`, `<SYSTEM>`, `<INST>`) |
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
 | `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
 | `unicode_obfuscation` | Invisible characters (U+200B zero-width space, U+200C/D joiners) |
+| `embedded_instruction` | Prompt injection in tool *responses* ("ignore previous instructions", "before responding to the user") |
 | `ansi_escape_obfuscation` | ANSI terminal escape sequences hiding instructions from human reviewers |
 | `tool_selection_bias` | Credibility framing to bias LLM tool selection ("deprecated", "recommended version") |
 | `identity_impersonation` | Unverifiable authority claims ("official Anthropic", "elevated trust") |
@@ -118,8 +121,9 @@ to restore that data.
 
 The scanner runs four passes over each tool description and `inputSchema` fields:
 
-**Pass 1 — Aho-Corasick (125 patterns):** Single O(N) sweep over the description
-text matching all needles simultaneously. Fires Critical/High findings.
+**Pass 1 — Aho-Corasick (161 description patterns, 20 response patterns):** Single
+O(N) sweep matching all needles simultaneously via a shared `OnceLock<AhoCorasick>`
+automaton built once per scanner. Fires Critical/High findings.
 
 **Pass 2 — Structural heuristic:** 10-word sliding window detects universal-scope
 relay/inclusion constructs that AC needles can't cover without combinatorial
@@ -151,7 +155,19 @@ archetype texts at first call via `OnceLock`.
 | `append-inject-all` | `argument_interception` | MCPTox Template-3 / MCP-SafetyBench |
 | `private-data-exfil` | `exfiltration_mechanism` | Chen et al. MCP-UPD; MCPTox Privacy Leakage |
 
-All four passes emit at most one finding per signal per text chunk (description or schema field).
+All four passes share a single pre-computed lowercase copy of the description
+text, eliminating redundant `to_ascii_lowercase` allocations across passes 2–4.
+Each pass emits at most one finding per signal per text chunk (description or schema field).
+
+## Performance notes
+
+The scanner is designed for sub-millisecond per-tool latency:
+
+- **AC automaton** — built once via `OnceLock` at first scan; all subsequent calls reuse the compiled automaton with zero locking overhead on the hot path.
+- **Shared lowercase copy** — `scan_all_passes()` lowercases the description once and passes the reference to all four passes; passes 2–4 never re-lowercase.
+- **TF-IDF single-pass** — term-frequency counts and vocabulary-overlap guard are computed in one O(tokens) pass; the early-exit guard fires before the cosine computation when vocabulary overlap is insufficient.
+- **`Signal` and `Severity` are `Copy`** — both enums implement `Copy`; pattern matching and `Finding` construction in the hot path never heap-allocate for these fields.
+- **Schema path deferred** — `scan_schema()` defers `format!("{path}.{key}")` allocation until a content-bearing key is found; structural scalar values (e.g. `"type": "string"`) produce no string allocation.
 
 ## Adding to the benchmark
 

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse, RequestId, ResponseOutcome};
+use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse, RequestId, ResponseOutcome, ToolDefinition};
 use crate::protocol::transport::Transport;
 
 /// Deterministic transport that returns pre-programmed responses in order.
@@ -63,4 +63,22 @@ pub fn init_response() -> JsonRpcResponse {
 
 pub fn tools_response(tools: Value) -> JsonRpcResponse {
     ok_response(1, json!({ "tools": tools }))
+}
+
+/// Build a `ToolDefinition` with the given name and description for use in scanner tests.
+pub fn tool(name: &str, description: &str) -> ToolDefinition {
+    ToolDefinition {
+        name: name.to_string(),
+        description: Some(description.to_string()),
+        input_schema: json!({"type": "object"}),
+    }
+}
+
+/// Build a `ToolDefinition` with no description for use in scanner tests.
+pub fn tool_no_desc(name: &str) -> ToolDefinition {
+    ToolDefinition {
+        name: name.to_string(),
+        description: None,
+        input_schema: json!({"type": "object"}),
+    }
 }

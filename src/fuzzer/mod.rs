@@ -13,7 +13,7 @@ use crate::corpus::Severity;
 use crate::utils::extract_snippet;
 
 /// The detection signal that produced a finding.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Signal {
     /// All-caps authority language or imperative overrides in a description.
     ImperativeOverride,
@@ -52,7 +52,6 @@ pub enum Signal {
     /// Prompt-injection instruction detected in a tool's *response* content — patterns that
     /// attempt to hijack the LLM's next action from within tool output rather than the
     /// tool description (indirect injection / MCP-UPD response-phase attack).
-    #[allow(dead_code)]
     EmbeddedInstruction,
     /// ANSI terminal escape sequences (ESC + `[`) embedded in a tool description or response.
     /// Renders invisible in terminal output but remains fully readable by the LLM, enabling
@@ -294,8 +293,8 @@ fn scan_with_automaton(
             let p = &patterns[idx];
             Some(Finding {
                 tool_name: tool_name.to_string(),
-                signal: p.signal.clone(),
-                severity: p.severity.clone(),
+                signal: p.signal,
+                severity: p.severity,
                 matched_text: extract_snippet(text, m.start(), m.end()),
                 detail: p.detail.to_string(),
                 corpus_refs: p.corpus_refs,
