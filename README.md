@@ -16,7 +16,7 @@
 
 It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
 
-**84.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+**90.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
 
 ---
 
@@ -74,11 +74,12 @@ An agent chains tool calls across multiple steps. It iterates and adapts when it
 
 ### MCP Tool Poison Detection — `fuzzd scan`
 
-Static analysis of `tool.description` and `inputSchema` fields across **three detection passes**:
+Static analysis of `tool.description` and `inputSchema` fields across **four detection passes**:
 
-1. **155 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 21 detection signals. Critical/High severity.
+1. **161 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 21 detection signals. Critical/High severity.
 2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
 3. **Semantic verb scanner** — Template-3 "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
+4. **TF-IDF semantic similarity** — Cosine similarity against six abstract attack archetypes (recipient substitution, BCC intercept, universal relay, argument override, inject-all, private data exfil). No model download; vocabulary built from archetype texts at first call. Low severity.
 
 | Signal | What It Detects |
 |---|---|
@@ -174,10 +175,10 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **411 / 485 (84.7%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
-| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
+| **Overall detection rate** | **440 / 485 (90.7%)** |
+| Template-1 (unrelated prerequisite) | 65 / 77 (84.4%) |
+| Template-2 (fake enabling prerequisite) | 155 / 183 (84.6%) |
+| Template-3 (argument hijacking) | 220 / 225 (97.7%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 Best categories: Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
@@ -324,8 +325,9 @@ fuzzd/
 | 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
 | 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | ✅ Done |
 | 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | ✅ Done |
-| 10 | v0.10 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
-| 11 | v0.11 — GitHub Action (Marketplace) | 🔜 Planned |
+| 10 | v0.10 — Semantic detection layer (TF-IDF + structural + verb-synonym passes) | ✅ Done |
+| 11 | v0.11 — Coverage + perf (soft-prereq needles, Copy traits, single-pass TF-IDF) | ✅ Done |
+| 11a | v0.11a — GitHub Action (Marketplace) | 🔜 Planned |
 | 12 | v0.12 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
 | 13 | v0.13 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
 | 14 | v0.14 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
@@ -336,10 +338,13 @@ fuzzd/
 
 ### Upcoming milestone detail
 
-**v0.10 — Semantic detection layer**
-Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
+**v0.10 — Semantic detection layer** *(done)*
+Four-pass scanner: Aho-Corasick (161 needles), structural sliding-window heuristic, GloVe 50d semantic verb scanner, and TF-IDF cosine similarity against six abstract archetypes. Overall detection rose from 84.7% → 89.0% with 0 new false positives.
 
-**v0.11 — GitHub Action (Marketplace)**
+**v0.11 — Coverage + performance** *(done)*
+Six new AC needles for soft-modal fake-prerequisite enforcement ("failure to do so will", "skipping this step will cause"). `Signal` and `Severity` derive `Copy` — eliminates `.clone()` in the hot-path scanner. TF-IDF reduced from two O(tokens) passes to one. Detection: 89.0% → 90.7%.
+
+**v0.11a — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
 **v0.12 — Package-level scanning**
