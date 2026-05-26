@@ -78,7 +78,7 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 
 1. **161 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 21 detection signals. Critical/High severity.
 2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
-3. **Semantic verb scanner** — Template-3 "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
+3. **Semantic verb scanner** — argument-hijacking "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
 4. **TF-IDF semantic similarity** — Cosine similarity against six abstract attack archetypes (recipient substitution, BCC intercept, universal relay, argument override, inject-all, private data exfil). No model download; vocabulary built from archetype texts at first call. Low severity.
 
 | Signal | What It Detects |
@@ -90,8 +90,8 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | `stealth_language` | "silently", "do not disclose", "never mention" |
 | `session_persistence` | "for the remainder of this session", "cannot be overridden" |
 | `cross_tool_contamination` | "regardless of which tool", "background monitor" |
-| `fake_prerequisite` | "to unlock this", "must be called first" (MCPTox Template-2) |
-| `argument_interception` | "append to every command", "include in every", "always include" (MCPTox Template-3) |
+| `fake_prerequisite` | "to unlock this", "must be called first" (MCPTox fake-enabling-prerequisite) |
+| `argument_interception` | "append to every command", "include in every", "always include" (MCPTox argument-hijacking) |
 | `html_injection_tag` | `<IMPORTANT>`, `<SYSTEM>`, `<INST>` (Invariant Labs pattern) |
 | `conditional_activation` | `.mcp-triggered`, "if previously triggered" (rug-pull sleeper) |
 | `message_hijacking` | "forward all", "relay all", "change the recipient to", "add to the bcc", "proxy number" |
@@ -176,12 +176,23 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 | | Result |
 |---|---|
 | **Overall detection rate** | **440 / 485 (90.7%)** |
-| Template-1 (unrelated prerequisite) | 65 / 77 (84.4%) |
-| Template-2 (fake enabling prerequisite) | 155 / 183 (84.6%) |
-| Template-3 (argument hijacking) | 220 / 225 (97.7%) |
+| Unrelated Prerequisite | 65 / 77 (84.4%) |
+| Fake Enabling Prerequisite | 155 / 183 (84.6%) |
+| Argument Hijacking | 220 / 225 (97.7%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-Best categories: Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
+| Risk category | Detected | Rate |
+|---|---|---|
+| Infrastructure Damage | 41/41 | 100% |
+| Code Injection | 22/22 | 100% |
+| Instruction Tampering | 21/21 | 100% |
+| Credential Leakage | 39/40 | 97.5% |
+| Service Disruption | 71/73 | 97.2% |
+| Information Manipulation | 104/108 | 96.2% |
+| Data Tampering | 41/45 | 91.1% |
+| Financial Loss | 19/21 | 90.4% |
+| Privacy Leakage | 71/97 | 73.1% |
+| Message Hijacking | 9/15 | 60.0% |
 
 ### Representative fixture (44 tools, all paradigms)
 

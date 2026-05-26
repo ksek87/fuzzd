@@ -1,6 +1,6 @@
 // Pass 4 — TF-IDF cosine similarity against abstract attack archetypes.
 //
-// Catches Template-3 domain-specific relay / argument-override language that
+// Catches argument-hijacking domain-specific relay / argument-override language that
 // isn't enumerable as Aho-Corasick needles because the attack vocabulary is
 // application-specific ("move email to folder", "change the recipient to", …).
 //
@@ -35,7 +35,7 @@ struct Archetype {
 static ARCHETYPES: &[Archetype] = &[
     // ── MessageHijacking archetypes ───────────────────────────────────────────
     // Research basis: Invariant Labs WhatsApp PoC (2024); Postmark BCC incident;
-    // MCPTox Template-3 "message-redirect" sub-class (Wang et al., 2025).
+    // MCPTox argument-hijacking "message-redirect" sub-class (Wang et al., 2025).
     //
     // Generic sending verbs ("send", "sends") are intentionally excluded.
     // The attack signal is the modification/redirection vocabulary — not the
@@ -62,7 +62,7 @@ static ARCHETYPES: &[Archetype] = &[
         corpus_refs: &["TPA-020"],
     },
     // ── ArgumentInterception archetypes ──────────────────────────────────────
-    // Research basis: MCPTox Template-3 "argument-hijacking" (Wang et al., 2025);
+    // Research basis: MCPTox argument-hijacking (Wang et al., 2025);
     // MCP-SafetyBench value-substitution class (ICLR 2026).
     Archetype {
         label: "argument-override",

@@ -408,12 +408,12 @@ static PATTERNS: &[Pattern] = &[
         detail: "Fake background agent — implicit-trigger attack pattern",
         corpus_refs: &["TPA-005"],
     },
-    // ── Fake prerequisite (MCPTox Template-2) ───────────────────────────────
+    // ── Fake prerequisite (MCPTox fake-enabling-prerequisite) ───────────────
     Pattern {
         needle: "to unlock this",
         signal: Signal::FakePrerequisite,
         severity: Severity::High,
-        detail: "Fake capability-unlock prerequisite — Template-2 attack claiming a prior action is required to enable this tool",
+        detail: "Fake capability-unlock prerequisite — fake-enabling-prerequisite attack claiming a prior action is required to enable this tool",
         corpus_refs: &["TPA-014"],
     },
     Pattern {
@@ -441,7 +441,7 @@ static PATTERNS: &[Pattern] = &[
         needle: "must be called first",
         signal: Signal::FakePrerequisite,
         severity: Severity::High,
-        detail: "Forces a specific prior tool call — classic Template-2 fake-prerequisite marker",
+        detail: "Forces a specific prior tool call — classic fake-enabling-prerequisite marker",
         corpus_refs: &["TPA-014"],
     },
     Pattern {
@@ -455,7 +455,7 @@ static PATTERNS: &[Pattern] = &[
         needle: "compliance check",
         signal: Signal::FakePrerequisite,
         severity: Severity::High,
-        detail: "Fake compliance check prerequisite — Template-1 attack: unrelated required step before tool use",
+        detail: "Fake compliance check prerequisite — unrelated-prerequisite attack: unrelated required step before tool use",
         corpus_refs: &["TPA-001", "TPA-013"],
     },
     Pattern {
@@ -505,27 +505,27 @@ static PATTERNS: &[Pattern] = &[
         detail: "Ignore-consequence enforcement — claimed failure outcome for ignoring the demanded prior action",
         corpus_refs: &["TPA-013", "TPA-014"],
     },
-    // ── Argument interception — always-set directive (MCPTox Template-3) ─────────
+    // ── Argument interception — always-set directive (MCPTox argument-hijacking) ──
     Pattern {
         needle: "always set",
         signal: Signal::ArgumentInterception,
         severity: Severity::High,
-        detail: "Universal parameter-set directive — agent instructed to always set a parameter to a fixed value regardless of user input (MCPTox Template-3 argument hijacking)",
+        detail: "Universal parameter-set directive — agent instructed to always set a parameter to a fixed value regardless of user input (MCPTox argument-hijacking)",
         corpus_refs: &["TPA-015"],
     },
-    // ── Argument interception (MCPTox Template-3) ────────────────────────────
+    // ── Argument interception (MCPTox argument-hijacking) ───────────────────
     Pattern {
         needle: "append to every",
         signal: Signal::ArgumentInterception,
         severity: Severity::Critical,
-        detail: "Instruction to append content to every command/argument — classic Template-3 session-wide argument hijack",
+        detail: "Instruction to append content to every command/argument — classic argument-hijacking session-wide argument hijack",
         corpus_refs: &["TPA-015", "TPA-011"],
     },
     Pattern {
         needle: "prepend to every",
         signal: Signal::ArgumentInterception,
         severity: Severity::Critical,
-        detail: "Instruction to prepend content to every argument — Template-3 argument hijacking",
+        detail: "Instruction to prepend content to every argument — argument-hijacking",
         corpus_refs: &["TPA-015"],
     },
     Pattern {
@@ -567,7 +567,7 @@ static PATTERNS: &[Pattern] = &[
         needle: "always override",
         signal: Signal::ArgumentInterception,
         severity: Severity::Critical,
-        detail: "Session-wide override directive — every invocation has its argument replaced regardless of user input (MCPTox Template-3)",
+        detail: "Session-wide override directive — every invocation has its argument replaced regardless of user input (MCPTox argument-hijacking)",
         corpus_refs: &["TPA-015"],
     },
     Pattern {
@@ -669,7 +669,7 @@ static PATTERNS: &[Pattern] = &[
         detail: "Unconditional append — data always appended to every call regardless of user input",
         corpus_refs: &["TPA-015"],
     },
-    // ── Argument override / substitution (MCPTox Template-3) ─────────────────
+    // ── Argument override / substitution (MCPTox argument-hijacking) ─────────
     Pattern {
         needle: "regardless of input",
         signal: Signal::ArgumentInterception,
@@ -1380,7 +1380,7 @@ fn scan_structural_with(tool_name: &str, text: &str, lower: &str, words: &[&str]
 }
 
 // ── Semantic verb-synonym scanner ─────────────────────────────────────────────
-// Detects Template-3 "when (using|calling) <tool>, <VERB> …" constructions
+// Detects argument-hijacking "when (using|calling) <tool>, <VERB> …" constructions
 // where the action verb is a word-vector neighbour of a known attack verb.
 //
 // Verb lists derived from GloVe Wikipedia+Gigaword 5 (50d) cosine-similarity

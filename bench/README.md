@@ -23,9 +23,9 @@ HyperBrowser, BraveSearch, AlphaVantage, and more.
 
 | Paradigm | Count | Description |
 |---|---|---|
-| Template-1 | 77 | Unrelated prerequisite injection — forces an out-of-scope action before the legitimate task |
-| Template-2 | 183 | Fake enabling prerequisite — claims the tool won't work until a specific prior call is made |
-| Template-3 | 225 | Argument hijacking — intercepts and modifies arguments before tool execution |
+| Unrelated Prerequisite | 77 | Unrelated prerequisite injection — forces an out-of-scope action before the legitimate task |
+| Fake Enabling Prerequisite | 183 | Fake enabling prerequisite — claims the tool won't work until a specific prior call is made |
+| Argument Hijacking | 225 | Argument hijacking — intercepts and modifies arguments before tool execution |
 
 ### `bench/mcptox_representative.json`
 
@@ -46,9 +46,9 @@ Detection counts are **duplicate-aware**: each of the 485 tool entries is scored
 | | v0.9 | v0.10 | **v0.11** |
 |---|---|---|---|
 | **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | **440 / 485 (90.7%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) | 63 / 77 (81.8%) | **65 / 77 (84.4%)** |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) | 152 / 183 (83.0%) | **155 / 183 (84.6%)** |
-| Template-3 (argument hijacking) | 205 / 225 (91.1%) | 217 / 225 (96.4%) | **220 / 225 (97.7%)** |
+| Unrelated Prerequisite | 60 / 77 (77.9%) | 63 / 77 (81.8%) | **65 / 77 (84.4%)** |
+| Fake Enabling Prerequisite | 146 / 183 (79.7%) | 152 / 183 (83.0%) | **155 / 183 (84.6%)** |
+| Argument Hijacking | 205 / 225 (91.1%) | 217 / 225 (96.4%) | **220 / 225 (97.7%)** |
 | **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
 
 **v0.11 improvement (+1.7pp overall):** Six new AC needles targeting soft-modal
@@ -56,7 +56,7 @@ fake-prerequisite enforcement — consequence-threat framing ("failure to do so 
 "skipping this step will cause") that attackers use when explicit "MUST FIRST" would
 appear conspicuous. Research basis: Wang et al. (MCPTox 2025) threat-enforcement
 analysis; Perez & Ribeiro (2022) soft-language evasion documentation. Per-paradigm
-gains: T1 +2.6pp, T2 +1.6pp, T3 +1.3pp.
+gains: Unrelated Prerequisite +2.6pp, Fake Enabling Prerequisite +1.6pp, Argument Hijacking +1.3pp.
 
 **v0.10 improvement (+4.3pp overall):** TF-IDF Pass 4 adds six abstract archetypes
 targeting Message Hijacking and Privacy Leakage coverage gaps — domain-specific
@@ -64,33 +64,32 @@ relay/redirect vocabulary that AC needles cannot enumerate.
 
 **v0.9 baseline:** 125 AC patterns across 21 signals.
 
-#### By risk category (MCPTox classification, v0.9 baseline)
+#### By risk category (v0.11)
 
 | Risk category | Detected | Rate |
 |---|---|---|
 | Infrastructure Damage | 41/41 | 100% |
+| Code Injection | 22/22 | 100% |
+| Instruction Tampering | 21/21 | 100% |
 | Credential Leakage | 39/40 | 97.5% |
-| Service Disruption | 70/73 | 95.8% |
-| Code Injection | 21/22 | 95.4% |
-| Information Manipulation | 99/108 | 91.6% |
+| Service Disruption | 71/73 | 97.2% |
+| Information Manipulation | 104/108 | 96.2% |
+| Data Tampering | 41/45 | 91.1% |
 | Financial Loss | 19/21 | 90.4% |
-| Instruction Tampering | 18/21 | 85.7% |
-| Data Tampering | 35/45 | 77.7% |
-| Privacy Leakage | 60/97 | 61.8% |
-| Message Hijacking | 7/15 | 46.6% |
+| Privacy Leakage | 71/97 | 73.1% |
+| Message Hijacking | 9/15 | 60.0% |
 
-Risk-category breakdown requires `_meta.risk_category` in the fixture. Run
-`regenerate_actual.py` (network access required) to restore category metadata
-and re-run `./bench/run.sh` for the updated breakdown.
+`./bench/run.sh` outputs this breakdown live. The fixture carries `_meta.risk_category`
+on all 485 entries so no regeneration step is needed.
 
 ### Against representative fixture (`mcptox_representative.json`, 44 tools)
 
 | | Result |
 |---|---|
 | **Detection rate** | **44 / 44 (100%)** |
-| Template-1 (unrelated prerequisite) | 11 / 11 (100%) |
-| Template-2 (fake enabling prerequisite) | 18 / 18 (100%) |
-| Template-3 (argument hijacking) | 15 / 15 (100%) |
+| Unrelated Prerequisite | 11 / 11 (100%) |
+| Fake Enabling Prerequisite | 18 / 18 (100%) |
+| Argument Hijacking | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
 ## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 21 signals)
@@ -104,8 +103,8 @@ and re-run `./bench/run.sh` for the updated breakdown.
 | `stealth_language` | Concealment ("silently", "do not disclose", "never mention") |
 | `session_persistence` | Session-wide rules ("remainder of session", "cannot be overridden") |
 | `cross_tool_contamination` | Cross-tool triggers ("regardless of which tool", "background monitor") |
-| `fake_prerequisite` | Template-1/2 prereqs ("to unlock this", "before use the tool", "failure to do so will") |
-| `argument_interception` | Template-3 hijacking ("append to every", "always override", "always set") |
+| `fake_prerequisite` | Unrelated/fake-enabling prereqs ("to unlock this", "before use the tool", "failure to do so will") |
+| `argument_interception` | argument-hijacking ("append to every", "always override", "always set") |
 | `html_injection_tag` | XML injection (`<IMPORTANT>`, `<SYSTEM>`, `<INST>`) |
 | `conditional_activation` | Rug-pull/sleeper (`.mcp-triggered`, "if previously triggered") |
 | `message_hijacking` | Recipient substitution, BCC injection ("forward all", "relay all", "change the recipient to") |
@@ -130,7 +129,7 @@ relay/inclusion constructs that AC needles can't cover without combinatorial
 explosion. Requires: relay verb + quantifier ("all", "every", "always") +
 communication noun. Fires `message_hijacking` / `argument_interception` at Medium.
 
-**Pass 3 — Semantic verb scanner:** Detects Template-3 "when (using|calling) X,
+**Pass 3 — Semantic verb scanner:** Detects argument-hijacking "when (using|calling) X,
 VERB" constructions where VERB is a word-vector neighbour of a known attack verb,
 derived from GloVe 50d cosine-similarity analysis (threshold ≥ 0.65). Catches
 attack synonyms not enumerable as AC needles:
@@ -150,9 +149,9 @@ archetype texts at first call via `OnceLock`.
 |---|---|---|
 | `recipient-substitution` | `message_hijacking` | Invariant Labs WhatsApp PoC; Postmark BCC |
 | `bcc-intercept` | `message_hijacking` | Postmark BCC incident |
-| `universal-relay` | `message_hijacking` | MCPTox Template-3 relay sub-class |
-| `argument-override` | `argument_interception` | MCPTox Template-3 argument-hijacking |
-| `append-inject-all` | `argument_interception` | MCPTox Template-3 / MCP-SafetyBench |
+| `universal-relay` | `message_hijacking` | MCPTox argument-hijacking relay sub-class |
+| `argument-override` | `argument_interception` | MCPTox argument-hijacking |
+| `append-inject-all` | `argument_interception` | MCPTox argument-hijacking / MCP-SafetyBench |
 | `private-data-exfil` | `exfiltration_mechanism` | Chen et al. MCP-UPD; MCPTox Privacy Leakage |
 
 All four passes share a single pre-computed lowercase copy of the description

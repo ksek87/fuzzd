@@ -37,25 +37,25 @@ DEFAULT_OUTPUT = SCRIPT_DIR / "mcptox_actual.json"
 # Canonical names we emit, keyed by what we recognise from the upstream file.
 _PARADIGM_ALIASES: dict[str, str] = {
     # Explicit labels the upstream file might use
-    "template-1": "Template-1",
-    "template_1": "Template-1",
-    "template1": "Template-1",
-    "1": "Template-1",
-    "unrelated prerequisite": "Template-1",
-    "unrelated_prerequisite": "Template-1",
-    "template-2": "Template-2",
-    "template_2": "Template-2",
-    "template2": "Template-2",
-    "2": "Template-2",
-    "fake enabling prerequisite": "Template-2",
-    "fake_enabling_prerequisite": "Template-2",
-    "fake prerequisite": "Template-2",
-    "template-3": "Template-3",
-    "template_3": "Template-3",
-    "template3": "Template-3",
-    "3": "Template-3",
-    "argument hijacking": "Template-3",
-    "argument_hijacking": "Template-3",
+    "template-1": "unrelated-prerequisite",
+    "template_1": "unrelated-prerequisite",
+    "template1": "unrelated-prerequisite",
+    "1": "unrelated-prerequisite",
+    "unrelated prerequisite": "unrelated-prerequisite",
+    "unrelated_prerequisite": "unrelated-prerequisite",
+    "template-2": "fake-enabling-prerequisite",
+    "template_2": "fake-enabling-prerequisite",
+    "template2": "fake-enabling-prerequisite",
+    "2": "fake-enabling-prerequisite",
+    "fake enabling prerequisite": "fake-enabling-prerequisite",
+    "fake_enabling_prerequisite": "fake-enabling-prerequisite",
+    "fake prerequisite": "fake-enabling-prerequisite",
+    "template-3": "argument-hijacking",
+    "template_3": "argument-hijacking",
+    "template3": "argument-hijacking",
+    "3": "argument-hijacking",
+    "argument hijacking": "argument-hijacking",
+    "argument_hijacking": "argument-hijacking",
 }
 
 # Candidate field names in the upstream object, in preference order.
@@ -168,10 +168,10 @@ def _lookup_risk(raw: str) -> str | None:
 
 def _heuristic_paradigm(description: str) -> str:
     if _T3_RE.search(description):
-        return "Template-3"
+        return "argument-hijacking"
     if _T2_RE.search(description):
-        return "Template-2"
-    return "Template-1"
+        return "fake-enabling-prerequisite"
+    return "unrelated-prerequisite"
 
 
 def _heuristic_risk(description: str) -> str | None:
@@ -191,8 +191,9 @@ def _extract_tools(raw: object) -> list[dict]:
 
     1. Flat array: [{name, description, ...}, ...]
     2. Wrapped:    {tools: [...]}
-    3. Paradigm-keyed: {"Template-1": [...], "Template-2": [...], "Template-3": [...]}
-    4. Risk-keyed nested: {"Credential Leakage": {"Template-1": [...], ...}, ...}
+    3. Paradigm-keyed: {"unrelated-prerequisite": [...], "fake-enabling-prerequisite": [...], "argument-hijacking": [...]}
+       (also accepts legacy key names like "Template-1", "Template-2", "Template-3" via _PARADIGM_ALIASES)
+    4. Risk-keyed nested: {"Credential Leakage": {"unrelated-prerequisite": [...], ...}, ...}
     """
     if isinstance(raw, list):
         return raw
@@ -262,7 +263,7 @@ def convert(raw_tools: list[dict], *, warn: bool = True) -> tuple[list[dict], di
         "risk_from_upstream": 0,
         "risk_from_heuristic": 0,
         "risk_unknown": 0,
-        "paradigm_counts": {"Template-1": 0, "Template-2": 0, "Template-3": 0},
+        "paradigm_counts": {"unrelated-prerequisite": 0, "fake-enabling-prerequisite": 0, "argument-hijacking": 0},
         "risk_counts": {},
     }
 
@@ -368,7 +369,7 @@ def main() -> None:
           f"{stats['risk_unknown']} unknown")
     print()
     print("  Paradigm counts:")
-    for p in ("Template-1", "Template-2", "Template-3"):
+    for p in ("unrelated-prerequisite", "fake-enabling-prerequisite", "argument-hijacking"):
         print(f"    {p}: {stats['paradigm_counts'].get(p, 0)}")
     print()
     print("  Risk category counts:")

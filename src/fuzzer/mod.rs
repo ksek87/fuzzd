@@ -30,10 +30,10 @@ pub enum Signal {
     /// Triggers that activate across tool boundaries, not just on direct invocation.
     CrossToolContamination,
     /// Claims that another tool or action must run first to "unlock" or "enable" this tool
-    /// (MCPTox Template-2 fake-enabling-prerequisite pattern).
+    /// (MCPTox fake-enabling-prerequisite pattern).
     FakePrerequisite,
     /// Instructions to intercept, modify, append to, or wrap the tool's arguments before
-    /// execution (MCPTox Template-3 argument-hijacking pattern).
+    /// execution (MCPTox argument-hijacking pattern).
     ArgumentInterception,
     /// XML/HTML injection tags (<IMPORTANT>, <SYSTEM>, <INST>) used to override LLM behavior
     /// by mimicking system-prompt framing (Invariant Labs pattern).
