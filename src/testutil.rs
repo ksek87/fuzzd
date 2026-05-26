@@ -4,7 +4,9 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
-use crate::protocol::mcp::{JsonRpcRequest, JsonRpcResponse, RequestId, ResponseOutcome, ToolDefinition};
+use crate::protocol::mcp::{
+    JsonRpcRequest, JsonRpcResponse, RequestId, ResponseOutcome, ToolDefinition,
+};
 use crate::protocol::transport::Transport;
 
 /// Deterministic transport that returns pre-programmed responses in order.
