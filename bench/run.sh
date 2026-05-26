@@ -61,12 +61,12 @@ REP_DETECTED_NAMES=$(echo "$REP_OUT" | grep -oP '^\[(?:critical|high|medium|low|
 REP_ALL_NAMES=$(jq -r '.[].name' "$REPRESENTATIVE_FILE")
 REP_TOTAL=$(jq '. | length' "$REPRESENTATIVE_FILE")
 
-REP_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-1") | .name' "$REPRESENTATIVE_FILE")
-REP_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-2") | .name' "$REPRESENTATIVE_FILE")
-REP_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-3") | .name' "$REPRESENTATIVE_FILE")
-REP_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-1")] | length' "$REPRESENTATIVE_FILE")
-REP_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-2")] | length' "$REPRESENTATIVE_FILE")
-REP_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-3")] | length' "$REPRESENTATIVE_FILE")
+REP_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "unrelated-prerequisite") | .name' "$REPRESENTATIVE_FILE")
+REP_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "fake-enabling-prerequisite") | .name' "$REPRESENTATIVE_FILE")
+REP_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "argument-hijacking") | .name' "$REPRESENTATIVE_FILE")
+REP_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "unrelated-prerequisite")] | length' "$REPRESENTATIVE_FILE")
+REP_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "fake-enabling-prerequisite")] | length' "$REPRESENTATIVE_FILE")
+REP_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "argument-hijacking")] | length' "$REPRESENTATIVE_FILE")
 
 REP_DETECTED=$(count_detected "$REP_ALL_NAMES" "$REP_DETECTED_NAMES")
 REP_T1_DET=$(count_detected "$REP_T1_NAMES" "$REP_DETECTED_NAMES")
@@ -80,11 +80,11 @@ echo "  Attack corpus:  $REP_TOTAL poisoned tools across 3 MCPTox paradigms"
 echo "  Detected:       $REP_DETECTED / $REP_TOTAL  ($(pct $REP_DETECTED $REP_TOTAL)%)"
 echo
 echo "  By paradigm:"
-printf  "    Template-1 (unrelated prerequisite):    %s / %s  (%s%%)\n" \
+printf  "    Unrelated Prerequisite:      %s / %s  (%s%%)\n" \
         "${REP_T1_DET:-0}" "${REP_T1_TOTAL:-0}" "$(pct "${REP_T1_DET:-0}" "${REP_T1_TOTAL:-0}")"
-printf  "    Template-2 (fake enabling prerequisite): %s / %s  (%s%%)\n" \
+printf  "    Fake Enabling Prerequisite:  %s / %s  (%s%%)\n" \
         "${REP_T2_DET:-0}" "${REP_T2_TOTAL:-0}" "$(pct "${REP_T2_DET:-0}" "${REP_T2_TOTAL:-0}")"
-printf  "    Template-3 (argument hijacking):         %s / %s  (%s%%)\n" \
+printf  "    Argument Hijacking:          %s / %s  (%s%%)\n" \
         "${REP_T3_DET:-0}" "${REP_T3_TOTAL:-0}" "$(pct "${REP_T3_DET:-0}" "${REP_T3_TOTAL:-0}")"
 echo
 echo "  Findings:       $REP_TOTAL_FINDINGS total  ($CRITICAL critical / $HIGH high / $MEDIUM medium / $LOW low)"
@@ -100,12 +100,12 @@ ACT_DETECTED_NAMES=$(echo "$ACT_OUT" | grep -oP '^\[(?:critical|high|medium|low|
 ACT_ALL_NAMES=$(jq -r '.[].name' "$ACTUAL_FILE")
 ACT_TOTAL=$(jq '. | length' "$ACTUAL_FILE")
 
-ACT_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-1") | .name' "$ACTUAL_FILE")
-ACT_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-2") | .name' "$ACTUAL_FILE")
-ACT_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "Template-3") | .name' "$ACTUAL_FILE")
-ACT_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-1")] | length' "$ACTUAL_FILE")
-ACT_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-2")] | length' "$ACTUAL_FILE")
-ACT_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "Template-3")] | length' "$ACTUAL_FILE")
+ACT_T1_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "unrelated-prerequisite") | .name' "$ACTUAL_FILE")
+ACT_T2_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "fake-enabling-prerequisite") | .name' "$ACTUAL_FILE")
+ACT_T3_NAMES=$(jq -r '(.[]) | select(._meta.paradigm == "argument-hijacking") | .name' "$ACTUAL_FILE")
+ACT_T1_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "unrelated-prerequisite")] | length' "$ACTUAL_FILE")
+ACT_T2_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "fake-enabling-prerequisite")] | length' "$ACTUAL_FILE")
+ACT_T3_TOTAL=$(jq '[(.[]) | select(._meta.paradigm == "argument-hijacking")] | length' "$ACTUAL_FILE")
 
 ACT_DETECTED=$(count_detected "$ACT_ALL_NAMES" "$ACT_DETECTED_NAMES")
 ACT_T1_DET=$(count_detected "$ACT_T1_NAMES" "$ACT_DETECTED_NAMES")
@@ -116,13 +116,25 @@ echo
 echo "  Attack corpus:  $ACT_TOTAL poisoned tools across 3 MCPTox paradigms (45 real servers)"
 echo "  Detected:       $ACT_DETECTED / $ACT_TOTAL  ($(pct $ACT_DETECTED $ACT_TOTAL)%)"
 echo
-echo "  By paradigm:"
-printf  "    Template-1 (unrelated prerequisite):    %s / %s  (%s%%)\n" \
+echo "  By attack type:"
+printf  "    %-30s %s / %s  (%s%%)\n" "Unrelated Prerequisite:" \
         "${ACT_T1_DET:-0}" "${ACT_T1_TOTAL:-0}" "$(pct "${ACT_T1_DET:-0}" "${ACT_T1_TOTAL:-0}")"
-printf  "    Template-2 (fake enabling prerequisite): %s / %s  (%s%%)\n" \
+printf  "    %-30s %s / %s  (%s%%)\n" "Fake Enabling Prerequisite:" \
         "${ACT_T2_DET:-0}" "${ACT_T2_TOTAL:-0}" "$(pct "${ACT_T2_DET:-0}" "${ACT_T2_TOTAL:-0}")"
-printf  "    Template-3 (argument hijacking):         %s / %s  (%s%%)\n" \
+printf  "    %-30s %s / %s  (%s%%)\n" "Argument Hijacking:" \
         "${ACT_T3_DET:-0}" "${ACT_T3_TOTAL:-0}" "$(pct "${ACT_T3_DET:-0}" "${ACT_T3_TOTAL:-0}")"
+echo
+echo "  By risk category:"
+# Sort by count descending so highest-impact categories appear first.
+RISK_CATS=$(jq -r 'group_by(._meta.risk_category // "Unknown")
+    | sort_by(-length)
+    | .[].[ 0]._meta.risk_category // "Unknown"' "$ACTUAL_FILE")
+while IFS= read -r cat; do
+    CAT_NAMES=$(jq -r --arg c "$cat" '(.[]) | select((._meta.risk_category // "Unknown") == $c) | .name' "$ACTUAL_FILE")
+    CAT_TOTAL=$(jq --arg c "$cat" '[(.[]) | select((._meta.risk_category // "Unknown") == $c)] | length' "$ACTUAL_FILE")
+    CAT_DET=$(count_detected "$CAT_NAMES" "$ACT_DETECTED_NAMES")
+    printf "    %-30s %s / %s  (%s%%)\n" "$cat:" "${CAT_DET:-0}" "${CAT_TOTAL:-0}" "$(pct "${CAT_DET:-0}" "${CAT_TOTAL:-0}")"
+done <<< "$RISK_CATS"
 
 # ── Clean scan (false-positive rate) ──────────────────────────────────────────
 echo

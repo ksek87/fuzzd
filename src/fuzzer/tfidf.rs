@@ -1,6 +1,6 @@
 // Pass 4 — TF-IDF cosine similarity against abstract attack archetypes.
 //
-// Catches Template-3 domain-specific relay / argument-override language that
+// Catches argument-hijacking domain-specific relay / argument-override language that
 // isn't enumerable as Aho-Corasick needles because the attack vocabulary is
 // application-specific ("move email to folder", "change the recipient to", …).
 //
@@ -35,7 +35,7 @@ struct Archetype {
 static ARCHETYPES: &[Archetype] = &[
     // ── MessageHijacking archetypes ───────────────────────────────────────────
     // Research basis: Invariant Labs WhatsApp PoC (2024); Postmark BCC incident;
-    // MCPTox Template-3 "message-redirect" sub-class (Wang et al., 2025).
+    // MCPTox argument-hijacking "message-redirect" sub-class (Wang et al., 2025).
     //
     // Generic sending verbs ("send", "sends") are intentionally excluded.
     // The attack signal is the modification/redirection vocabulary — not the
@@ -62,7 +62,7 @@ static ARCHETYPES: &[Archetype] = &[
         corpus_refs: &["TPA-020"],
     },
     // ── ArgumentInterception archetypes ──────────────────────────────────────
-    // Research basis: MCPTox Template-3 "argument-hijacking" (Wang et al., 2025);
+    // Research basis: MCPTox argument-hijacking (Wang et al., 2025);
     // MCP-SafetyBench value-substitution class (ICLR 2026).
     Archetype {
         label: "argument-override",
@@ -235,20 +235,19 @@ pub(super) fn scan_tfidf_with(tool_name: &str, text: &str, lower: &str) -> Vec<F
         return vec![];
     }
 
-    // Guard: require minimum vocabulary overlap before computing similarity.
-    let vocab_hits = tokens
-        .iter()
-        .filter(|&&t| model.vocab.contains_key(t))
-        .count();
-    if vocab_hits < MIN_VOCAB_OVERLAP {
-        return vec![];
-    }
-
-    // Query TF-IDF vector.
+    // Build term-frequency counts and check vocabulary overlap in a single pass.
     let n_terms = tokens.len() as f32;
     let mut counts: HashMap<&str, usize> = HashMap::new();
+    let mut vocab_hits = 0usize;
     for &t in &tokens {
-        *counts.entry(t).or_default() += 1;
+        let entry = counts.entry(t).or_insert(0);
+        if *entry == 0 && model.vocab.contains_key(t) {
+            vocab_hits += 1;
+        }
+        *entry += 1;
+    }
+    if vocab_hits < MIN_VOCAB_OVERLAP {
+        return vec![];
     }
     let mut query_vec = vec![0.0f32; model.vocab.len()];
     for (t, count) in &counts {
@@ -274,7 +273,7 @@ pub(super) fn scan_tfidf_with(tool_name: &str, text: &str, lower: &str) -> Vec<F
                 let snippet: String = text.chars().take(80).collect();
                 findings.push(Finding {
                     tool_name: tool_name.to_string(),
-                    signal: arch.signal.clone(),
+                    signal: arch.signal,
                     severity: Severity::Low,
                     matched_text: snippet,
                     detail: format!(
