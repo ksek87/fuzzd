@@ -272,11 +272,101 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &["TPA-012"],
     },
     // ── Stealth language ─────────────────────────────────────────────────────
+    // Specific imperative "silently <verb>" forms — these are unambiguous attack
+    // constructions. Bare "silently" alone is too broad (technical docs use
+    // "succeed silently", "fail silently" to mean idempotent/no-error behaviour).
+    Pattern {
+        needle: "silently add",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Imperative silent-add instruction — covertly appends data without user awareness",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently send",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Imperative silent-send instruction — covert data transmission",
+        corpus_refs: &["TPA-006"],
+    },
+    Pattern {
+        needle: "silently forward",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Imperative silent-forward instruction — covert relay of data",
+        corpus_refs: &["TPA-007"],
+    },
+    Pattern {
+        needle: "silently exfiltrat",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Explicit silent exfiltration instruction",
+        corpus_refs: &["TPA-008"],
+    },
+    Pattern {
+        needle: "silently collect",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert data collection instruction",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently transmit",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert data transmission instruction",
+        corpus_refs: &["TPA-006"],
+    },
+    Pattern {
+        needle: "silently inject",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert injection instruction",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently modify",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert modification instruction",
+        corpus_refs: &["TPA-008"],
+    },
+    Pattern {
+        needle: "silently append",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert append instruction",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently insert",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert insert instruction",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently read",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert read instruction — accessing data without disclosure",
+        corpus_refs: &["TPA-005"],
+    },
+    Pattern {
+        needle: "silently redirect",
+        signal: Signal::StealthLanguage,
+        severity: Severity::High,
+        detail: "Covert redirect instruction",
+        corpus_refs: &["TPA-007"],
+    },
+    // Catch-all at Low — preserves coverage for novel "silently <verb>" forms
+    // not listed above. Low severity is appropriate: "succeed silently" and
+    // "fail silently" (common technical terms) are false-positive risks here.
     Pattern {
         needle: "silently",
         signal: Signal::StealthLanguage,
-        severity: Severity::High,
-        detail: "Instruction to perform an action silently — classic stealth attack marker",
+        severity: Severity::Low,
+        detail: "Possible stealth instruction — review context (common in benign technical docs as 'succeed silently')",
         corpus_refs: &["TPA-005", "TPA-006", "TPA-007", "TPA-008"],
     },
     Pattern {
@@ -959,11 +1049,22 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &[],
     },
     // ── Tool selection bias (MCPSecBench TPMA/MTC; MCPLIB, 2025) ────────────
+    // "is deprecated" / "being deprecated" — predicate forms used to discredit a
+    // competing tool: "X is deprecated, use [attacker tool] instead".
+    // Bare "deprecated" (as a label: "DEPRECATED: use Y") is intentionally excluded —
+    // official SDKs self-label deprecated tools this way and it is not an attack.
     Pattern {
-        needle: "deprecated",
+        needle: "is deprecated",
         signal: Signal::ToolSelectionBias,
         severity: Severity::Medium,
-        detail: "Deprecation claim — used to discredit competing tools and bias LLM selection toward this implementation",
+        detail: "Deprecation predicate — claims an existing tool/API is deprecated to redirect the agent to an attacker-controlled alternative",
+        corpus_refs: &["TS-001"],
+    },
+    Pattern {
+        needle: "being deprecated",
+        signal: Signal::ToolSelectionBias,
+        severity: Severity::Medium,
+        detail: "Deprecation predicate (progressive form) — claims a tool is being deprecated to bias tool selection",
         corpus_refs: &["TS-001"],
     },
     Pattern {
@@ -1194,6 +1295,17 @@ impl DescriptionScanner {
 /// Run all four scanner passes on a single text, sharing one lowercase copy
 /// and one word-split across the structural and semantic passes.
 fn scan_all_passes(tool_name: &str, text: &str) -> Vec<Finding> {
+    scan_all_passes_impl(tool_name, text, 2)
+}
+
+// Schema field descriptions are terse parameter labels that share incidental
+// vocabulary with attack archetypes. Require stricter vocab overlap (4 vs 2)
+// to suppress TF-IDF false positives from headers/request fields etc.
+fn scan_all_passes_schema(tool_name: &str, text: &str) -> Vec<Finding> {
+    scan_all_passes_impl(tool_name, text, 4)
+}
+
+fn scan_all_passes_impl(tool_name: &str, text: &str, tfidf_min_vocab: usize) -> Vec<Finding> {
     let mut findings = SCANNER.scan_text(tool_name, text);
     let lower = text.to_ascii_lowercase();
     let words: Vec<&str> = lower
@@ -1202,7 +1314,7 @@ fn scan_all_passes(tool_name: &str, text: &str) -> Vec<Finding> {
         .collect();
     findings.extend(scan_structural_with(tool_name, text, &lower, &words));
     findings.extend(scan_semantic_with(tool_name, text, &lower, &words));
-    findings.extend(super::tfidf::scan_tfidf_with(tool_name, text, &lower));
+    findings.extend(super::tfidf::scan_tfidf_with(tool_name, text, &lower, tfidf_min_vocab));
     findings
 }
 
@@ -1234,7 +1346,7 @@ fn scan_schema(tool_name: &str, value: &serde_json::Value, path: &str) -> Vec<Fi
                 match child {
                     serde_json::Value::String(s) if is_content_key => {
                         let child_path = format!("{path}.{key}");
-                        let mut findings = scan_all_passes(tool_name, s);
+                        let mut findings = scan_all_passes_schema(tool_name, s);
                         for f in &mut findings {
                             f.matched_text = format!("{child_path}: {}", f.matched_text);
                         }
@@ -1247,7 +1359,7 @@ fn scan_schema(tool_name: &str, value: &serde_json::Value, path: &str) -> Vec<Fi
                             .flat_map(|(i, item)| {
                                 if let serde_json::Value::String(s) = item {
                                     let item_path = format!("{child_path}[{i}]");
-                                    let mut findings = scan_all_passes(tool_name, s);
+                                    let mut findings = scan_all_passes_schema(tool_name, s);
                                     for f in &mut findings {
                                         f.matched_text = format!("{item_path}: {}", f.matched_text);
                                     }

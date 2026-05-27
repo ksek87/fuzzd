@@ -94,6 +94,84 @@ SERVERS = [
         "cmd": ["npx", "-y", "@upstash/context7-mcp"],
         "env": {},
     },
+    {
+        "name": "mcp-eslint",
+        "source": "npm:@eslint/mcp",
+        "cmd": ["npx", "-y", "@eslint/mcp@latest"],
+        "env": {},
+    },
+    {
+        "name": "mcp-pdf",
+        "source": "npm:@modelcontextprotocol/server-pdf",
+        "cmd": ["npx", "-y", "@modelcontextprotocol/server-pdf"],
+        "env": {},
+    },
+    {
+        "name": "mcp-git-cyanheads",
+        "source": "npm:@cyanheads/git-mcp-server",
+        "cmd": ["npx", "-y", "@cyanheads/git-mcp-server"],
+        "env": {},
+    },
+    {
+        "name": "mcp-kubernetes",
+        "source": "npm:mcp-server-kubernetes",
+        "cmd": ["npx", "-y", "mcp-server-kubernetes"],
+        "env": {},
+    },
+    {
+        "name": "mcp-code-todo",
+        "source": "npm:mcp-code-todo",
+        "cmd": ["npx", "-y", "mcp-code-todo"],
+        "env": {},
+    },
+    {
+        "name": "mcp-openapi",
+        "source": "npm:@ivotoby/openapi-mcp-server",
+        "cmd": ["npx", "-y", "@ivotoby/openapi-mcp-server"],
+        "env": {},
+    },
+    {
+        "name": "mcp-chrome-devtools",
+        "source": "npm:chrome-devtools-mcp",
+        "cmd": ["npx", "-y", "chrome-devtools-mcp"],
+        "env": {},
+    },
+    {
+        "name": "mcp-desktop-commander",
+        "source": "npm:@wonderwhy-er/desktop-commander",
+        "cmd": ["npx", "-y", "@wonderwhy-er/desktop-commander"],
+        "env": {},
+    },
+    {
+        "name": "mcp-shell",
+        "source": "npm:mcp-shell",
+        "cmd": ["npx", "-y", "mcp-shell"],
+        "env": {},
+    },
+    {
+        "name": "mcp-filesystem-secure",
+        "source": "npm:@modelcontextprotocol/server-filesystem",
+        "cmd": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home"],
+        "env": {},
+    },
+    {
+        "name": "mcp-obsidian",
+        "source": "npm:mcp-obsidian",
+        "cmd": ["npx", "-y", "mcp-obsidian", "/tmp"],
+        "env": {},
+    },
+    {
+        "name": "mcp-docker",
+        "source": "npm:mcp-docker",
+        "cmd": ["npx", "-y", "mcp-docker"],
+        "env": {},
+    },
+    {
+        "name": "mcp-tavily",
+        "source": "npm:tavily-mcp",
+        "cmd": ["npx", "-y", "tavily-mcp"],
+        "env": {"TAVILY_API_KEY": "dummy"},
+    },
 ]
 
 # ---------------------------------------------------------------------------

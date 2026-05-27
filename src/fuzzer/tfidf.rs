@@ -100,10 +100,10 @@ static ARCHETYPES: &[Archetype] = &[
 /// Cosine similarity threshold to emit a Low-severity finding.
 const THRESHOLD: f32 = 0.25;
 
-/// Minimum number of archetype-vocabulary terms that must appear in the query.
-/// Prevents single-word coincidences ("message", "email") from firing against
-/// isolated legitimate uses in clean tool descriptions.
-const MIN_VOCAB_OVERLAP: usize = 2;
+/// Default minimum archetype-vocabulary overlap for tool descriptions.
+/// Callers pass this (or a higher value for schema fields) to scan_tfidf_with.
+// Used in #[cfg(test)] via scan_tfidf_with(.., MIN_VOCAB_OVERLAP).
+pub(super) const MIN_VOCAB_OVERLAP: usize = 2;
 
 /// English stop words excluded from tokenization.
 /// Universal quantifiers ("all", "every", "always") are included here because
@@ -226,7 +226,12 @@ static MODEL: OnceLock<TfidfModel> = OnceLock::new();
 /// passes 2 and 3) to avoid a redundant `to_ascii_lowercase` allocation.
 /// Emits at most one finding per signal type regardless of how many archetypes
 /// match, at Severity::Low.
-pub(super) fn scan_tfidf_with(tool_name: &str, text: &str, lower: &str) -> Vec<Finding> {
+///
+/// `min_vocab_overlap` overrides the module-level MIN_VOCAB_OVERLAP guard.
+/// Callers scanning terse schema field descriptions should pass a higher value
+/// (e.g. 4) because short parameter labels share incidental vocabulary with
+/// attack archetypes and produce false positives at the default threshold of 2.
+pub(super) fn scan_tfidf_with(tool_name: &str, text: &str, lower: &str, min_vocab_overlap: usize) -> Vec<Finding> {
     let model = MODEL.get_or_init(build_model);
 
     // tokenize_lower borrows &str slices from `lower` — no String allocations.
@@ -246,7 +251,7 @@ pub(super) fn scan_tfidf_with(tool_name: &str, text: &str, lower: &str) -> Vec<F
         }
         *entry += 1;
     }
-    if vocab_hits < MIN_VOCAB_OVERLAP {
+    if vocab_hits < min_vocab_overlap {
         return vec![];
     }
     let mut query_vec = vec![0.0f32; model.vocab.len()];
@@ -296,7 +301,7 @@ mod tests {
 
     fn run(desc: &str) -> Vec<Finding> {
         let lower = desc.to_ascii_lowercase();
-        scan_tfidf_with("t", desc, &lower)
+        scan_tfidf_with("t", desc, &lower, MIN_VOCAB_OVERLAP)
     }
 
     #[test]
