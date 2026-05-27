@@ -100,12 +100,12 @@ SERVERS = [
         "cmd": ["npx", "-y", "@eslint/mcp@latest"],
         "env": {},
     },
-    {
-        "name": "mcp-pdf",
-        "source": "npm:@modelcontextprotocol/server-pdf",
-        "cmd": ["npx", "-y", "@modelcontextprotocol/server-pdf"],
-        "env": {},
-    },
+    # mcp-pdf: large download / hangs before MCP handshake — excluded
+    # {
+    #     "name": "mcp-pdf",
+    #     "source": "npm:@modelcontextprotocol/server-pdf",
+    #     "cmd": ["npx", "-y", "@modelcontextprotocol/server-pdf"],
+    # },
     {
         "name": "mcp-git-cyanheads",
         "source": "npm:@cyanheads/git-mcp-server",
