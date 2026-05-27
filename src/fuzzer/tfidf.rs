@@ -102,7 +102,7 @@ const THRESHOLD: f32 = 0.25;
 
 /// Default minimum archetype-vocabulary overlap for tool descriptions.
 /// Callers pass this (or a higher value for schema fields) to scan_tfidf_with.
-// Used in #[cfg(test)] via scan_tfidf_with(.., MIN_VOCAB_OVERLAP).
+#[cfg(test)]
 pub(super) const MIN_VOCAB_OVERLAP: usize = 2;
 
 /// English stop words excluded from tokenization.

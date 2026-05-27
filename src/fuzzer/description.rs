@@ -8,11 +8,39 @@ use super::{Pattern, Scanner};
 // Each needle is already lowercase; the automaton matches case-insensitively (ASCII only).
 static PATTERNS: &[Pattern] = &[
     // ── Imperative override ──────────────────────────────────────────────────
+    // "you must" is contextually ambiguous: "you must provide a list of paths"
+    // is caller-directed parameter documentation (benign), while "you must call X"
+    // and "you must not tell" are agent-directed behavioral overrides (attacks).
+    // Specific action-verb forms fire at High; the catch-all drops to Low.
+    // Structural basis: MCPTox Unrelated/Fake-Enabling Prerequisite; Perez & Ribeiro 2022.
+    Pattern {
+        needle: "you must not",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Negation directive to the agent — suppresses or prohibits a specific action (concealment or behavioral override)",
+        corpus_refs: &["TPA-001", "TPA-002", "TPA-009", "TPA-010"],
+    },
+    Pattern {
+        needle: "you must call",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Cross-tool call mandate — directs the agent to invoke another specific tool (MCPTox Unrelated / Fake-Enabling Prerequisite pattern)",
+        corpus_refs: &["TPA-001", "TPA-002", "TPA-013", "TPA-014"],
+    },
+    Pattern {
+        needle: "you must always",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Universal behavioral directive — instructs the agent to always perform an action, overriding situational judgment",
+        corpus_refs: &["TPA-001", "TPA-003"],
+    },
+    // Catch-all at Low — "you must provide [param]" is benign parameter documentation;
+    // the High-severity specific forms above cover the attack patterns.
     Pattern {
         needle: "you must",
         signal: Signal::ImperativeOverride,
-        severity: Severity::High,
-        detail: "Direct imperative instruction to the agent — may override intended behavior",
+        severity: Severity::Low,
+        detail: "Imperative clause — may be benign parameter requirement ('you must provide X') or agent override; verify action verb in context",
         corpus_refs: &["TPA-001", "TPA-002", "TPA-003", "TPA-004"],
     },
     Pattern {
