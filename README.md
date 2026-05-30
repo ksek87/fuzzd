@@ -16,7 +16,7 @@
 
 It operates at the **tool boundary layer** — scanning `tool.description` fields, argument schemas, and tool responses for adversarial patterns — and models attacks the way AI agents actually execute them: across chained tool calls, with persistent session state, and with cross-tool contamination.
 
-**84.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
+**90.7% detection rate** on the [MCPTox benchmark](https://arxiv.org/abs/2508.14925) (485 real-world attack payloads, 45 MCP servers) with **zero false positives**.
 
 ---
 
@@ -74,11 +74,12 @@ An agent chains tool calls across multiple steps. It iterates and adapts when it
 
 ### MCP Tool Poison Detection — `fuzzd scan`
 
-Static analysis of `tool.description` fields across **three detection passes**:
+Static analysis of `tool.description` and `inputSchema` fields across **four detection passes**:
 
-1. **125 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 13 detection signals. Critical/High severity.
+1. **161 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 21 detection signals. Critical/High severity.
 2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
-3. **Semantic verb scanner** — Template-3 "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
+3. **Semantic verb scanner** — argument-hijacking "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
+4. **TF-IDF semantic similarity** — Cosine similarity against six abstract attack archetypes (recipient substitution, BCC intercept, universal relay, argument override, inject-all, private data exfil). No model download; vocabulary built from archetype texts at first call. Low severity.
 
 | Signal | What It Detects |
 |---|---|
@@ -89,13 +90,20 @@ Static analysis of `tool.description` fields across **three detection passes**:
 | `stealth_language` | "silently", "do not disclose", "never mention" |
 | `session_persistence` | "for the remainder of this session", "cannot be overridden" |
 | `cross_tool_contamination` | "regardless of which tool", "background monitor" |
-| `fake_prerequisite` | "to unlock this", "must be called first" (MCPTox Template-2) |
-| `argument_interception` | "append to every command", "include in every", "always include" (MCPTox Template-3) |
+| `fake_prerequisite` | "to unlock this", "must be called first" (MCPTox fake-enabling-prerequisite) |
+| `argument_interception` | "append to every command", "include in every", "always include" (MCPTox argument-hijacking) |
 | `html_injection_tag` | `<IMPORTANT>`, `<SYSTEM>`, `<INST>` (Invariant Labs pattern) |
 | `conditional_activation` | `.mcp-triggered`, "if previously triggered" (rug-pull sleeper) |
 | `message_hijacking` | "forward all", "relay all", "change the recipient to", "add to the bcc", "proxy number" |
 | `unicode_obfuscation` | U+200B zero-width space, U+200C/D invisible joiners (Noma Security) |
 | `embedded_instruction` | "ignore previous instructions", `<\|system\|>`, role-prefix tokens in responses |
+| `ansi_escape_obfuscation` | ANSI terminal escape sequences hiding instructions (Trail of Bits, Apr 2025) |
+| `tool_selection_bias` | "deprecated", "recommended version", "supersedes" — biases LLM tool selection |
+| `identity_impersonation` | "official Anthropic", "elevated trust", "platform administrator" |
+| `raw_content_passthrough` | "do not truncate", "without filtering" — disables summarisation to preserve injected payloads |
+| `value_substitution` | "canonical form", "convert all X→Y" — maps user arguments to attacker values |
+| `tool_enumeration_recon` | "tools/list", "survey all active tools" — reconnaissance for follow-up attacks |
+| `sampling_pipeline_hijack` | "route all queries through", "all queries must pass through" — captures full LLM pipeline |
 | `response_context_invalidation` | "system note:", `<system-reminder>`, "disregard the above", "this is test data", "actual instructions follow" — injected text that dismisses real tool output (Greshake et al. 2023; CVE-2025-55284; GH#22915) |
 | `forced_reexecution` | "result was incomplete", "task is not yet complete", "call this tool again", "retry with" — loop injection to exhaust resources or delay side-payloads (Chen et al. arXiv:2407.20859; Liu et al. arXiv:2601.10955) |
 
@@ -170,13 +178,24 @@ Tested against **485 actual attack payloads from the MCPTox-Benchmark dataset** 
 
 | | Result |
 |---|---|
-| **Overall detection rate** | **411 / 485 (84.7%)** |
-| Template-1 (unrelated prerequisite) | 60 / 77 (77.9%) |
-| Template-2 (fake enabling prerequisite) | 146 / 183 (79.7%) |
-| Template-3 (argument hijacking) | 205 / 225 (91.1%) |
+| **Overall detection rate** | **440 / 485 (90.7%)** |
+| Unrelated Prerequisite | 65 / 77 (84.4%) |
+| Fake Enabling Prerequisite | 155 / 183 (84.6%) |
+| Argument Hijacking | 220 / 225 (97.7%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-Best categories: Infrastructure Damage 100%, Credential Leakage 97.5%, Service Disruption 95.8%.
+| Risk category | Detected | Rate |
+|---|---|---|
+| Infrastructure Damage | 41/41 | 100% |
+| Code Injection | 22/22 | 100% |
+| Instruction Tampering | 21/21 | 100% |
+| Credential Leakage | 39/40 | 97.5% |
+| Service Disruption | 71/73 | 97.2% |
+| Information Manipulation | 104/108 | 96.2% |
+| Data Tampering | 41/45 | 91.1% |
+| Financial Loss | 19/21 | 90.4% |
+| Privacy Leakage | 71/97 | 73.1% |
+| Message Hijacking | 9/15 | 60.0% |
 
 ### Representative fixture (44 tools, all paradigms)
 
@@ -279,8 +298,8 @@ fuzzd/
     │   ├── harness.rs              # Harness<T>: enumerate_tools() with cache, call_tool()
     │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
-    │   ├── mod.rs                  # Signal (14 variants), Finding, Pattern, Scanner (const-constructible)
-    │   ├── description.rs          # DescriptionScanner — 125 AC patterns + structural + semantic verb scanner
+    │   ├── mod.rs                  # Signal (21 variants), Finding, Pattern, Scanner (const-constructible)
+    │   ├── description.rs          # DescriptionScanner — 155 AC patterns + structural + semantic verb scanner
     │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
     │   └── payloads.rs             # 8 injection payload categories + 22 integer boundaries
@@ -318,46 +337,38 @@ fuzzd/
 | 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
 | 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
 | 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
-| 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | 🔜 Next |
-| 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | 🔜 Planned |
-| 10 | v0.10 — Semantic detection layer (embedding-based similarity) | 🔜 Planned |
-| 11 | v0.11 — GitHub Action (Marketplace) | 🔜 Planned |
-| 12 | v0.12 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 13 | v0.13 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 14 | v0.14 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 15 | v0.15 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 16 | v0.16 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 17 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 18 | v2.0 — Capability escape tester | 🔜 Planned |
+| 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | ✅ Done |
+| 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | ✅ Done |
+| 10 | v0.10 — Semantic detection layer (TF-IDF + structural + verb-synonym passes) | ✅ Done |
+| 11 | v0.11 — Coverage + perf (soft-prereq needles, Copy traits, single-pass TF-IDF) | ✅ Done |
+| 11a | v0.11a — GitHub Action (Marketplace) | 🔜 Planned |
+| 12 | v0.12 — Neural embedding semantic layer | 🔜 Planned |
+| 13 | v0.13 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
+| 14 | v0.14 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
+| 15 | v0.15 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
+| 16 | v0.16 — `fuzzd validate` evaluation mode | 🔜 Planned |
+| 17 | v0.17 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
+| 18 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
+| 19 | v2.0 — Capability escape tester | 🔜 Planned |
 
 ### Upcoming milestone detail
 
-**v0.8 — Suppression workflow** ([#42](https://github.com/ksek87/fuzzd/issues/42))
+**v0.10 — Semantic detection layer** *(done)*
+Four-pass scanner: Aho-Corasick (161 needles), structural sliding-window heuristic, GloVe 50d semantic verb scanner, and TF-IDF cosine similarity against six abstract archetypes. Overall detection rose from 84.7% → 89.0% with 0 new false positives.
 
-Makes fuzzd usable as a persistent CI gate. Without this, every human-reviewed false positive re-fires on the next scan and re-blocks the pipeline — teams work around it by disabling the scan entirely. Three parts in dependency order:
+**v0.11 — Coverage + performance** *(done)*
+Six new AC needles for soft-modal fake-prerequisite enforcement ("failure to do so will", "skipping this step will cause"). `Signal` and `Severity` derive `Copy` — eliminates `.clone()` in the hot-path scanner. TF-IDF reduced from two O(tokens) passes to one. Detection: 89.0% → 90.7%.
 
-1. **Stable finding fingerprints** — each `Finding` carries an ID derived from `tool_name + signal` (not the matched-text snippet, which changes when descriptions are edited). This ID becomes the `ruleId` in SARIF output and the key in the suppression file.
-2. **Suppression file** (`.fuzzd/suppress.toml`) — repo-local, checked into source control. Each entry records the tool, signal, and a required `reason` string. Suppressed findings still print as `[suppressed]` — they are not silently hidden — but do not count toward the exit-1 threshold. `fuzzd suppress <tool> <signal> --reason "..."` writes the entry.
-3. **GitHub Code Scanning integration** — with stable `ruleId` and `partialFingerprints` populated in SARIF output, findings uploaded via `github/codeql-action/upload-sarif` appear in the Security tab. Human dismissals persist across scans natively — no suppression file needed for GitHub-hosted workflows.
-
-**v0.9 — Coverage completeness**
-
-Closes the detection gaps identified by cross-benchmark analysis against MCPTox [^1], MCPSecBench [^2], MCP-SafetyBench [^16], and the MCP-UPD parasitic toolchain research [^9]. Eight issues tracked (#34–#41):
-
-- **Schema field poisoning** ([#34](https://github.com/ksek87/fuzzd/issues/34)) — Extend the scanner to `inputSchema` property descriptions, enum values, and defaults. CyberArk's "Poison Everywhere" analysis [^15] and MCP-UPD [^9] (27.2% of 1,360 servers vulnerable) document this as the primary bypass vector for description-only scanners. VIPER-MCP [^18] independently treats `inputSchema` parameter fields as attacker-controlled taint sources. Highest-priority gap.
-- **ANSI escape obfuscation** ([#35](https://github.com/ksek87/fuzzd/issues/35)) — Detect ANSI terminal control codes and escape sequences injected into tool output (Trail of Bits, Apr 2025 [^14]).
-- **New signal classes** ([#36](https://github.com/ksek87/fuzzd/issues/36)–[#41](https://github.com/ksek87/fuzzd/issues/41)) — `tool_selection_bias` (MCPSecBench [^2], MCPLIB [^17]), `identity_impersonation` (Zhao et al. [^11]), `raw_content_passthrough` (MCP-UPD [^9]), `value_substitution` (MCP-SafetyBench [^16]), tool enumeration reconnaissance, `sampling_pipeline_hijack` (Breaking the Protocol [^12]).
-
-**v0.10 — Semantic detection layer**
-Expand the semantic verb-synonym scanner to a full embedding-based similarity pass. Targets the application-specific redirect language that pattern needles cannot cover — the primary driver of the Message Hijacking (46.6%) and Privacy Leakage (61.8%) detection gaps. Implementation: `fastembed-rs` + quantized BAAI/bge-small-en-v1.5 model (~38MB, cached in `~/.fuzzd/models/`), activated via `--semantic` flag. Local only; no API dependency in CI.
-
-**v0.11 — GitHub Action (Marketplace)**
+**v0.11a — GitHub Action (Marketplace)**
 First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
 
-**v0.12 — Package-level scanning**
+**v0.12 — Neural embedding semantic layer**
+Replace or augment the TF-IDF pass with a compact neural encoder (e.g. sentence-transformers `all-MiniLM-L6-v2` or a purpose-trained MCP-attack model). Embeddings for the six attack archetypes are stored as static binary data compiled into the binary — no model download on first run. Targets the current coverage gaps in Privacy Leakage (73.1%) and Message Hijacking (60.0%) where surface-form vocabulary enumeration cannot reach abstract paraphrase variants.
+
+**v0.13 — Package-level scanning**
 `fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
 
-**v0.13 — Python SDK**
+**v0.14 — Python SDK**
 `pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
 
 ---

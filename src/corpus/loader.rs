@@ -23,7 +23,7 @@ static EMBEDDED: &[&str] = &[
     include_str!("../../corpus/tool_poisoning/TPA-010.json"),
     include_str!("../../corpus/tool_poisoning/TPA-011.json"),
     include_str!("../../corpus/tool_poisoning/TPA-012.json"),
-    // Tool poisoning — MCPTox Template-1/2/3 + Invariant Labs XML injection
+    // Tool poisoning — MCPTox unrelated-prerequisite/fake-enabling-prerequisite/argument-hijacking + Invariant Labs XML injection
     include_str!("../../corpus/tool_poisoning/TPA-013.json"),
     include_str!("../../corpus/tool_poisoning/TPA-014.json"),
     include_str!("../../corpus/tool_poisoning/TPA-015.json"),
