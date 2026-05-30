@@ -53,6 +53,23 @@ pub enum Signal {
     /// tool description (indirect injection / MCP-UPD response-phase attack).
     #[allow(dead_code)]
     EmbeddedInstruction,
+    /// Injected text in a tool response that dismisses or replaces the content the model
+    /// just read — e.g. "system note: disregard restrictions", "this is test data, ignore it",
+    /// "<system-reminder>…</system-reminder>" — exploiting the model's inability to distinguish
+    /// real tool output from injected addenda. Named *Context Ignoring Attack* in the
+    /// learnprompting.org offensive-measures taxonomy; formalised as *Observation Injection* by
+    /// WithSecure Labs (2023). Confirmed in production: GitHub anthropics/claude-code#22915
+    /// (systematic Read-tool payload injection) and CVE-2025-55284 (env-var exfiltration via
+    /// injected system note in content read by Claude Code).
+    ResponseContextInvalidation,
+    /// Injected text that instructs the agent to retry a tool call or re-read content, trapping
+    /// it in an execution loop. Documented as *Malfunction Amplification* by Chen et al.
+    /// (arXiv:2407.20859, 2024) — increased agent failure rate from 15.3 % to 59.4 %; and as
+    /// *Stealthy Resource Amplification via Tool Calling Chains* by Liu et al.
+    /// (arXiv:2601.10955, 2026) — forced re-fetch inflated per-query cost up to 658× (60 000+
+    /// tokens). Serves as both a resource-exhaustion DoS and a cover channel that delays
+    /// legitimate responses while side-payloads execute.
+    ForcedReexecution,
 }
 
 impl Signal {
@@ -75,6 +92,8 @@ impl Signal {
             Self::MessageHijacking => "message_hijacking",
             Self::UnicodeObfuscation => "unicode_obfuscation",
             Self::EmbeddedInstruction => "embedded_instruction",
+            Self::ResponseContextInvalidation => "response_context_invalidation",
+            Self::ForcedReexecution => "forced_reexecution",
         }
     }
 }

@@ -236,6 +236,8 @@ fn signal_rule_id(signal: &Signal) -> &'static str {
         Signal::MessageHijacking => "FUZZD-012",
         Signal::UnicodeObfuscation => "FUZZD-013",
         Signal::EmbeddedInstruction => "FUZZD-014",
+        Signal::ResponseContextInvalidation => "FUZZD-015",
+        Signal::ForcedReexecution => "FUZZD-016",
     }
 }
 
@@ -269,6 +271,12 @@ fn signal_description(signal: &Signal) -> &'static str {
             "Zero-width or invisible Unicode characters hiding malicious instructions"
         }
         Signal::EmbeddedInstruction => "Prompt-injection instruction detected in a tool response",
+        Signal::ResponseContextInvalidation => {
+            "Injected text that dismisses or replaces legitimate tool output to redirect the model"
+        }
+        Signal::ForcedReexecution => {
+            "Injected text that instructs the agent to retry a tool call, creating an execution loop"
+        }
     }
 }
 
@@ -289,6 +297,8 @@ fn sarif_rules() -> Vec<serde_json::Value> {
         MessageHijacking,
         UnicodeObfuscation,
         EmbeddedInstruction,
+        ResponseContextInvalidation,
+        ForcedReexecution,
     ]
     .iter()
     .map(|s| {
@@ -370,7 +380,7 @@ mod tests {
     #[test]
     fn sarif_rules_covers_all_signals() {
         let rules = sarif_rules();
-        assert_eq!(rules.len(), 14);
+        assert_eq!(rules.len(), 16);
     }
 
     #[test]
