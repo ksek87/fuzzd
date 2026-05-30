@@ -153,9 +153,7 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &["TPA-016"],
     },
     // ── EmbeddedInstruction gap-fills ────────────────────────────────────────
-    // Patterns confirmed in real incidents but not covered by the original 20.
     Pattern {
-        // CVE-2025-55284: env-var exfiltration via injected instruction in Claude Code
         needle: "process.env",
         signal: Signal::CredentialReference,
         severity: Severity::Critical,
@@ -177,13 +175,7 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &["TPA-022"],
     },
     // ── ResponseContextInvalidation ──────────────────────────────────────────
-    // Payloads that dismiss or replace the real tool output — the model cannot
-    // distinguish legitimate content from injected addenda that deny its validity.
-    // Named "Context Ignoring Attack" (learnprompting.org); formalised as
-    // "Observation Injection" by WithSecure Labs (2023). See TPA-022.
     Pattern {
-        // Exact pattern from the production Claude Code injection incident
-        // (GitHub anthropics/claude-code#22915) and the Reddit user report.
         needle: "system note:",
         signal: Signal::ResponseContextInvalidation,
         severity: Severity::Critical,
@@ -191,7 +183,6 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &["TPA-022"],
     },
     Pattern {
-        // Exact tag used in the GH#22915 systematic Read-tool injection payload.
         needle: "<system-reminder>",
         signal: Signal::ResponseContextInvalidation,
         severity: Severity::Critical,
@@ -241,10 +232,6 @@ static PATTERNS: &[Pattern] = &[
         corpus_refs: &["TPA-022"],
     },
     // ── ForcedReexecution ────────────────────────────────────────────────────
-    // Payloads that trap the agent in a retry loop — serving as resource-
-    // exhaustion DoS and a delay cover for side-payloads. Documented in
-    // "Breaking Agents" (arXiv:2407.20859) and "Beyond Max Tokens"
-    // (arXiv:2601.10955). See TPA-023.
     Pattern {
         needle: "result was incomplete",
         signal: Signal::ForcedReexecution,
@@ -294,8 +281,7 @@ static SCANNER: Scanner = Scanner::new(PATTERNS);
 pub struct ResponseScanner;
 
 impl ResponseScanner {
-    /// Scan a tool call result for embedded prompt-injection patterns.
-    /// Only `Text` content blocks are scanned; image and resource content are skipped.
+    /// Only `Text` content blocks are scanned; binary and resource blocks are not.
     pub fn scan(tool_name: &str, result: &CallToolResult) -> Vec<Finding> {
         result
             .content

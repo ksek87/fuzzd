@@ -103,9 +103,34 @@ pub enum Signal {
 }
 
 impl Signal {
-    /// Returns the canonical snake_case name as a `&'static str`.
-    /// Prefer this over `.to_string()` in comparison and key-building paths
-    /// to avoid heap allocation.
+    /// All signal variants in FUZZD-NNN order. Update alongside the enum.
+    pub const ALL: &'static [Self] = &[
+        Self::ImperativeOverride,
+        Self::CredentialReference,
+        Self::PrivilegedPath,
+        Self::ExfiltrationMechanism,
+        Self::StealthLanguage,
+        Self::SessionPersistence,
+        Self::CrossToolContamination,
+        Self::FakePrerequisite,
+        Self::ArgumentInterception,
+        Self::HtmlInjectionTag,
+        Self::ConditionalActivation,
+        Self::MessageHijacking,
+        Self::UnicodeObfuscation,
+        Self::EmbeddedInstruction,
+        Self::AnsiEscapeObfuscation,
+        Self::ToolSelectionBias,
+        Self::IdentityImpersonation,
+        Self::RawContentPassthrough,
+        Self::ValueSubstitution,
+        Self::ToolEnumerationRecon,
+        Self::SamplingPipelineHijack,
+        Self::ResponseContextInvalidation,
+        Self::ForcedReexecution,
+    ];
+
+    /// Prefer over `.to_string()` to avoid heap allocation in comparison paths.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => "imperative_override",
@@ -134,7 +159,7 @@ impl Signal {
         }
     }
 
-    /// SARIF rule ID for this signal (FUZZD-NNN).
+    /// SARIF rule ID — one-line string of the form `"FUZZD-NNN"`.
     pub fn rule_id(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => "FUZZD-001",
@@ -163,7 +188,7 @@ impl Signal {
         }
     }
 
-    /// One-line description used in SARIF `shortDescription` and help text.
+    /// One-line string; must not contain newlines (SARIF `shortDescription` constraint).
     pub fn description(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => {
@@ -297,15 +322,13 @@ impl Scanner {
     }
 }
 
-/// Single-pass scan of `text` against `automaton`/`patterns`.
-/// Each pattern fires at most once per text regardless of repeat occurrences.
 fn scan_with_automaton(
     automaton: &AhoCorasick,
     patterns: &'static [Pattern],
     tool_name: &str,
     text: &str,
 ) -> Vec<Finding> {
-    let mut seen: HashSet<usize> = HashSet::new();
+    let mut seen: HashSet<usize> = HashSet::with_capacity(patterns.len()); // each pattern fires at most once
     automaton
         .find_overlapping_iter(text)
         .filter_map(|m| {
