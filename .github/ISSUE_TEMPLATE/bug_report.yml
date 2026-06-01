@@ -1,0 +1,64 @@
+name: Bug report
+description: Something fuzzd does that it shouldn't, or doesn't do that it should.
+labels: ["type/bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: check that `cargo test` passes on your local build and that you're on the latest release.
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      description: The exact `fuzzd` command that triggered the issue.
+      placeholder: "fuzzd scan --schema tools.json --output sarif"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected fuzzd to do.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What fuzzd actually did. Include the full output or error message.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: |
+        The smallest input (tool definition JSON, corpus record, or MCP server config) that triggers the issue.
+        Attach files or paste inline. Redact any credentials.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: fuzzd version
+      description: Output of `fuzzd --version`
+      placeholder: "0.11.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true

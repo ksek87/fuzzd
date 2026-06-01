@@ -1,0 +1,95 @@
+name: Corpus record
+description: Propose a new attack corpus record from published research.
+labels: ["type/corpus"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Corpus records encode known MCP attack patterns as reproducible, citable test cases.
+        Every record must cite a published source — no unsourced payloads.
+        See `corpus/tool_poisoning/TPA-001.json` for the full schema.
+
+  - type: input
+    id: source
+    attributes:
+      label: Source publication
+      description: Author(s), title, and year of the paper, blog post, CVE, or security talk.
+      placeholder: "Wang et al., MCPTox (2025)"
+    validations:
+      required: true
+
+  - type: input
+    id: source_url
+    attributes:
+      label: Source URL
+      description: Direct link to the publication or finding.
+      placeholder: "https://arxiv.org/abs/..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Attack category
+      options:
+        - tool_poisoning
+        - tool_shadowing
+        - rug_pull
+    validations:
+      required: true
+
+  - type: dropdown
+    id: injection_point
+    attributes:
+      label: Injection point
+      description: Where in the MCP tool definition or lifecycle does this attack manifest?
+      options:
+        - tool.description
+        - tool.inputSchema
+        - tool_response
+        - tool.name
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Match the classification used in the source research where possible.
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+
+  - type: textarea
+    id: payload
+    attributes:
+      label: Payload
+      description: The attack payload text. This will appear in the corpus record's `payload` field.
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Detection rationale
+      description: |
+        Which existing Signal does this payload exercise? Or does it represent a new attack class
+        requiring a new Signal? If new, name it and describe the detection approach.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: validation
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: Source is a published paper, CVE, or security blog post (not personal speculation)
+          required: true
+        - label: I have run `fuzzd corpus validate` against the JSON record (if attaching a file)
+          required: false
+        - label: Payload does not contain real credentials or PII
+          required: true
