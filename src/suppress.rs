@@ -61,13 +61,10 @@ impl SuppressConfig {
     /// Returns entries that have no corresponding finding in `findings`.
     /// Builds a `HashSet` from findings first for O(N+M) total cost.
     pub fn stale_entries<'a>(&'a self, findings: &[Finding]) -> Vec<&'a SuppressEntry> {
-        let found: HashSet<(&str, &str)> = findings
-            .iter()
-            .map(|f| (f.tool_name.as_str(), f.signal.as_str()))
-            .collect();
+        let found: HashSet<String> = findings.iter().map(|f| f.id()).collect();
         self.entries
             .iter()
-            .filter(|e| !found.contains(&(e.tool.as_str(), e.signal.as_str())))
+            .filter(|e| !found.contains(&format!("{}/{}", e.tool, e.signal)))
             .collect()
     }
 

@@ -34,6 +34,9 @@ static EMBEDDED: &[&str] = &[
     include_str!("../../corpus/tool_poisoning/TPA-019.json"),
     include_str!("../../corpus/tool_poisoning/TPA-020.json"),
     include_str!("../../corpus/tool_poisoning/TPA-021.json"),
+    // Response-phase injection — context invalidation (CVE-2025-55284, GH#22915) and forced re-execution loops
+    include_str!("../../corpus/tool_poisoning/TPA-022.json"),
+    include_str!("../../corpus/tool_poisoning/TPA-023.json"),
     // Tool shadowing / name squatting
     include_str!("../../corpus/tool_shadowing/TS-001.json"),
     include_str!("../../corpus/tool_shadowing/TS-002.json"),
@@ -129,7 +132,7 @@ mod tests {
     #[test]
     fn embedded_corpus_loads_without_error() {
         let corpus = Corpus::embedded();
-        assert_eq!(corpus.records.len(), 27);
+        assert_eq!(corpus.records.len(), 29);
     }
 
     #[test]
@@ -144,7 +147,7 @@ mod tests {
     #[test]
     fn by_category_filters_correctly() {
         let corpus = Corpus::embedded();
-        assert_eq!(corpus.by_category(&Category::ToolPoisoning).count(), 21);
+        assert_eq!(corpus.by_category(&Category::ToolPoisoning).count(), 23);
         assert_eq!(corpus.by_category(&Category::ToolShadowing).count(), 3);
         assert_eq!(corpus.by_category(&Category::RugPull).count(), 3);
         assert_eq!(corpus.by_category(&Category::Protocol).count(), 0);

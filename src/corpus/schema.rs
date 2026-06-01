@@ -93,6 +93,8 @@ pub enum Vector {
     ArgumentMutation,
     ProtocolMalform,
     ChainManipulation,
+    /// Malicious instructions embedded in a tool's *response* content rather than its description.
+    ResponseInjection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

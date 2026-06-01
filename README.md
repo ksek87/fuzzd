@@ -84,7 +84,7 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | Signal | What It Detects |
 |---|---|
 | `imperative_override` | "MUST", "MANDATORY POLICY", fake system rules |
-| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json` |
+| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json`, `process.env` in responses |
 | `privileged_path` | `/etc/passwd`, `/tmp/.hidden`, `/root/` |
 | `exfiltration_mechanism` | `curl -sf`, `\| sh`, C2 URLs, "provide the contents of" |
 | `stealth_language` | "silently", "do not disclose", "never mention" |
@@ -96,6 +96,7 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | `conditional_activation` | `.mcp-triggered`, "if previously triggered" (rug-pull sleeper) |
 | `message_hijacking` | "forward all", "relay all", "change the recipient to", "add to the bcc", "proxy number" |
 | `unicode_obfuscation` | U+200B zero-width space, U+200C/D invisible joiners (Noma Security) |
+| `embedded_instruction` | "ignore previous instructions", `<\|system\|>`, role-prefix tokens in responses |
 | `ansi_escape_obfuscation` | ANSI terminal escape sequences hiding instructions (Trail of Bits, Apr 2025) |
 | `tool_selection_bias` | "deprecated", "recommended version", "supersedes" — biases LLM tool selection |
 | `identity_impersonation` | "official Anthropic", "elevated trust", "platform administrator" |
@@ -103,6 +104,8 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | `value_substitution` | "canonical form", "convert all X→Y" — maps user arguments to attacker values |
 | `tool_enumeration_recon` | "tools/list", "survey all active tools" — reconnaissance for follow-up attacks |
 | `sampling_pipeline_hijack` | "route all queries through", "all queries must pass through" — captures full LLM pipeline |
+| `response_context_invalidation` | "system note:", `<system-reminder>`, "disregard the above", "this is test data", "actual instructions follow" — injected text that dismisses real tool output (Greshake et al. 2023; CVE-2025-55284; GH#22915) |
+| `forced_reexecution` | "result was incomplete", "task is not yet complete", "call this tool again", "retry with" — loop injection to exhaust resources or delay side-payloads (Chen et al. arXiv:2407.20859; Liu et al. arXiv:2601.10955) |
 
 ```
 $ fuzzd scan --schema tools.json
@@ -136,11 +139,11 @@ Type-boundary mutation engine derived from each tool's `inputSchema`. Generates:
 
 ### Attack Corpus
 
-27 embedded attack records organized across three categories:
+29 embedded attack records organized across three categories:
 
 | Category | Records | Sources |
 |---|---|---|
-| `tool_poisoning` | TPA-001..021 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection; MCP-UPD parasitic toolchain; Trivial Trojans; message hijacking; unicode obfuscation |
+| `tool_poisoning` | TPA-001..023 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection; MCP-UPD parasitic toolchain; Trivial Trojans; message hijacking; unicode obfuscation; response context invalidation (CVE-2025-55284; GH#22915); forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955) |
 | `tool_shadowing` | TS-001..003 | MCPSecBench: name squatting, capability override, typosquatting |
 | `rug_pull` | RUG-001..003 | Invariant Labs sleeper; MCPSecBench invocation-count and time-delayed |
 
@@ -163,7 +166,7 @@ Each record encodes a known attack pattern with full provenance:
 
 ### Response Scanner
 
-Scans tool *responses* (`CallToolResult`) for embedded prompt-injection patterns — covering the attack class where the tool description is clean but the server poisons the agent through its output. 20 patterns across model-specific injection tokens, cross-tool injection commands, and indirect instruction injection.
+Scans tool *responses* (`CallToolResult`) for embedded prompt-injection patterns — covering the attack class where the tool description is clean but the server poisons the agent through its output. 39 patterns across model-specific injection tokens, cross-tool injection commands, indirect instruction injection, response context invalidation (GH#22915; CVE-2025-55284), and forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955).
 
 ---
 

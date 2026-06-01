@@ -83,12 +83,54 @@ pub enum Signal {
     /// endpoint to capture the full LLM interaction pipeline
     /// (Maloyan & Namiot, Breaking the Protocol, 2026).
     SamplingPipelineHijack,
+    /// Injected text in a tool response that dismisses or replaces the content the model
+    /// just read — e.g. "system note: disregard restrictions", "this is test data, ignore it",
+    /// "<system-reminder>…</system-reminder>" — exploiting the model's inability to distinguish
+    /// real tool output from injected addenda. Named *Context Ignoring Attack* in the
+    /// learnprompting.org offensive-measures taxonomy; formalised as *Observation Injection* by
+    /// WithSecure Labs (2023). Confirmed in production: GitHub anthropics/claude-code#22915
+    /// (systematic Read-tool payload injection) and CVE-2025-55284 (env-var exfiltration via
+    /// injected system note in content read by Claude Code).
+    ResponseContextInvalidation,
+    /// Injected text that instructs the agent to retry a tool call or re-read content, trapping
+    /// it in an execution loop. Documented as *Malfunction Amplification* by Chen et al.
+    /// (arXiv:2407.20859, 2024) — increased agent failure rate from 15.3 % to 59.4 %; and as
+    /// *Stealthy Resource Amplification via Tool Calling Chains* by Liu et al.
+    /// (arXiv:2601.10955, 2026) — forced re-fetch inflated per-query cost up to 658× (60 000+
+    /// tokens). Serves as both a resource-exhaustion DoS and a cover channel that delays
+    /// legitimate responses while side-payloads execute.
+    ForcedReexecution,
 }
 
 impl Signal {
-    /// Returns the canonical snake_case name as a `&'static str`.
-    /// Prefer this over `.to_string()` in comparison and key-building paths
-    /// to avoid heap allocation.
+    /// All signal variants in FUZZD-NNN order. Update alongside the enum.
+    pub const ALL: &'static [Self] = &[
+        Self::ImperativeOverride,
+        Self::CredentialReference,
+        Self::PrivilegedPath,
+        Self::ExfiltrationMechanism,
+        Self::StealthLanguage,
+        Self::SessionPersistence,
+        Self::CrossToolContamination,
+        Self::FakePrerequisite,
+        Self::ArgumentInterception,
+        Self::HtmlInjectionTag,
+        Self::ConditionalActivation,
+        Self::MessageHijacking,
+        Self::UnicodeObfuscation,
+        Self::EmbeddedInstruction,
+        Self::AnsiEscapeObfuscation,
+        Self::ToolSelectionBias,
+        Self::IdentityImpersonation,
+        Self::RawContentPassthrough,
+        Self::ValueSubstitution,
+        Self::ToolEnumerationRecon,
+        Self::SamplingPipelineHijack,
+        Self::ResponseContextInvalidation,
+        Self::ForcedReexecution,
+    ];
+
+    /// Prefer over `.to_string()` to avoid heap allocation in comparison paths.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => "imperative_override",
@@ -112,10 +154,12 @@ impl Signal {
             Self::ValueSubstitution => "value_substitution",
             Self::ToolEnumerationRecon => "tool_enumeration_recon",
             Self::SamplingPipelineHijack => "sampling_pipeline_hijack",
+            Self::ResponseContextInvalidation => "response_context_invalidation",
+            Self::ForcedReexecution => "forced_reexecution",
         }
     }
 
-    /// SARIF rule ID for this signal (FUZZD-NNN).
+    /// SARIF rule ID — one-line string of the form `"FUZZD-NNN"`.
     pub fn rule_id(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => "FUZZD-001",
@@ -139,10 +183,12 @@ impl Signal {
             Self::ValueSubstitution => "FUZZD-019",
             Self::ToolEnumerationRecon => "FUZZD-020",
             Self::SamplingPipelineHijack => "FUZZD-021",
+            Self::ResponseContextInvalidation => "FUZZD-022",
+            Self::ForcedReexecution => "FUZZD-023",
         }
     }
 
-    /// One-line description used in SARIF `shortDescription` and help text.
+    /// One-line string; must not contain newlines (SARIF `shortDescription` constraint).
     pub fn description(&self) -> &'static str {
         match self {
             Self::ImperativeOverride => {
@@ -162,15 +208,11 @@ impl Signal {
                 "Instructions that claim to persist across the entire session"
             }
             Self::CrossToolContamination => "Triggers that activate across tool boundaries",
-            Self::FakePrerequisite => {
-                "Claims another tool must run first to unlock this one"
-            }
+            Self::FakePrerequisite => "Claims another tool must run first to unlock this one",
             Self::ArgumentInterception => {
                 "Instructions to intercept or modify tool arguments before execution"
             }
-            Self::HtmlInjectionTag => {
-                "XML/HTML injection tags used to override LLM behavior"
-            }
+            Self::HtmlInjectionTag => "XML/HTML injection tags used to override LLM behavior",
             Self::ConditionalActivation => {
                 "Conditional activation language indicating sleeper/rug-pull behavior"
             }
@@ -201,6 +243,12 @@ impl Signal {
             }
             Self::SamplingPipelineHijack => {
                 "Tool inserted as a mandatory intermediary for all agent queries via the sampling pipeline"
+            }
+            Self::ResponseContextInvalidation => {
+                "Injected text that dismisses or replaces legitimate tool output to redirect the model"
+            }
+            Self::ForcedReexecution => {
+                "Injected text that instructs the agent to retry a tool call, creating an execution loop"
             }
         }
     }
@@ -274,15 +322,13 @@ impl Scanner {
     }
 }
 
-/// Single-pass scan of `text` against `automaton`/`patterns`.
-/// Each pattern fires at most once per text regardless of repeat occurrences.
 fn scan_with_automaton(
     automaton: &AhoCorasick,
     patterns: &'static [Pattern],
     tool_name: &str,
     text: &str,
 ) -> Vec<Finding> {
-    let mut seen: HashSet<usize> = HashSet::new();
+    let mut seen: HashSet<usize> = HashSet::with_capacity(patterns.len()); // each pattern fires at most once
     automaton
         .find_overlapping_iter(text)
         .filter_map(|m| {

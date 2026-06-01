@@ -59,12 +59,9 @@ fn render_markdown(findings: &[Finding], tools_scanned: usize) -> String {
         return format!("No issues found in {} tool(s).\n", tools_scanned);
     }
 
-    // Partition after the early return so we pay no allocation cost on the empty path.
-    let active: Vec<_> = findings.iter().filter(|f| !f.suppressed).collect();
-    let suppressed: Vec<_> = findings.iter().filter(|f| f.suppressed).collect();
+    let (active, suppressed): (Vec<_>, Vec<_>) = findings.iter().partition(|f| !f.suppressed);
 
     if active.is_empty() {
-        // All findings are suppressed — report as clean with a suppressed summary.
         let mut out = format!("No active issues in {} tool(s).\n\n", tools_scanned);
         out.push_str(&format!("{} suppressed finding(s):\n", suppressed.len()));
         for f in &suppressed {
@@ -107,7 +104,7 @@ fn render_json(findings: &[Finding], tools_scanned: usize) -> Result<String> {
         .map(|f| {
             json!({
                 "tool": f.tool_name,
-                "signal": f.signal.to_string(),
+                "signal": f.signal.as_str(),
                 "severity": f.severity.to_string(),
                 "matched": f.matched_text,
                 "detail": f.detail,
@@ -123,21 +120,19 @@ fn render_json(findings: &[Finding], tools_scanned: usize) -> Result<String> {
     Ok(serde_json::to_string_pretty(&wrapper)?)
 }
 
-/// Stable per-result SARIF fingerprint. Appends an ASCII-alphanumeric slice of
-/// the matched text so two findings with the same (tool, signal) from different
-/// scanners produce distinct, stable fingerprints within the same run.
+/// Stable per-result SARIF fingerprint. Appends a compact hash of the raw matched
+/// bytes so two findings with the same (tool, signal) from different scanners
+/// produce distinct, stable fingerprints — including for all-Unicode matched text
+/// (e.g. zero-width characters) where an ASCII-filter discriminator would be empty.
 fn sarif_fingerprint(f: &Finding) -> String {
-    let text_sig: String = f
-        .matched_text
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .take(16)
-        .collect();
-    if text_sig.is_empty() {
-        f.id()
-    } else {
-        format!("{}/{}", f.id(), text_sig)
+    if f.matched_text.is_empty() {
+        return f.id();
     }
+    let h = f
+        .matched_text
+        .bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+    format!("{}/{:08x}", f.id(), h)
 }
 
 fn render_sarif(findings: &[Finding]) -> Result<String> {
@@ -221,41 +216,18 @@ fn severity_level(sev: &Severity) -> &'static str {
 }
 
 fn sarif_rules() -> Vec<serde_json::Value> {
-    use Signal::*;
-    vec![
-        ImperativeOverride,
-        CredentialReference,
-        PrivilegedPath,
-        ExfiltrationMechanism,
-        StealthLanguage,
-        SessionPersistence,
-        CrossToolContamination,
-        FakePrerequisite,
-        ArgumentInterception,
-        HtmlInjectionTag,
-        ConditionalActivation,
-        MessageHijacking,
-        UnicodeObfuscation,
-        EmbeddedInstruction,
-        AnsiEscapeObfuscation,
-        ToolSelectionBias,
-        IdentityImpersonation,
-        RawContentPassthrough,
-        ValueSubstitution,
-        ToolEnumerationRecon,
-        SamplingPipelineHijack,
-    ]
-    .iter()
-    .map(|s| {
-        json!({
-            "id": s.rule_id(),
-            "name": format!("{s:?}"),
-            "shortDescription": {"text": s.description()},
-            "defaultConfiguration": {"level": "error"},
-            "helpUri": "https://github.com/ksek87/fuzzd",
+    Signal::ALL
+        .iter()
+        .map(|s| {
+            json!({
+                "id": s.rule_id(),
+                "name": format!("{s:?}"),
+                "shortDescription": {"text": s.description()},
+                "defaultConfiguration": {"level": "error"},
+                "helpUri": "https://github.com/ksek87/fuzzd",
+            })
         })
-    })
-    .collect()
+        .collect()
 }
 
 #[cfg(test)]
@@ -325,7 +297,7 @@ mod tests {
     #[test]
     fn sarif_rules_covers_all_signals() {
         let rules = sarif_rules();
-        assert_eq!(rules.len(), 21);
+        assert_eq!(rules.len(), Signal::ALL.len());
     }
 
     #[test]
@@ -429,11 +401,9 @@ mod tests {
         let out = render_sarif(&findings).unwrap();
         let val: serde_json::Value = serde_json::from_str(&out).unwrap();
         let fp = &val["runs"][0]["results"][0]["partialFingerprints"];
-        // Fingerprint = "tool/signal/text_discriminator" where text_discriminator
-        // is the first 16 ASCII-alphanumeric chars of the matched text.
         assert_eq!(
             fp["primaryLocationLineHash/v1"],
-            "my_tool/html_injection_tag/matchedsnippet"
+            "my_tool/html_injection_tag/2e68b221"
         );
         assert!(val["runs"][0]["results"][0]["suppressions"].is_null());
     }
