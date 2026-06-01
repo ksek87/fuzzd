@@ -62,7 +62,7 @@ gains: Unrelated Prerequisite +2.6pp, Fake Enabling Prerequisite +1.6pp, Argumen
 targeting Message Hijacking and Privacy Leakage coverage gaps — domain-specific
 relay/redirect vocabulary that AC needles cannot enumerate.
 
-**v0.9 baseline:** 125 AC patterns across 21 signals.
+**v0.9 baseline:** 125 AC patterns across 21 signals. FUZZD-022 and FUZZD-023 (response-phase signals) added in the [Unreleased] cycle.
 
 #### By risk category (v0.11)
 
@@ -92,7 +92,7 @@ on all 485 entries so no regeneration step is needed.
 | Argument Hijacking | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 21 signals)
+## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 23 signals)
 
 | Signal | Role |
 |---|---|
@@ -117,6 +117,8 @@ on all 485 entries so no regeneration step is needed.
 | `value_substitution` | Normalisation-disguised argument substitution ("canonical form", "convert all X→Y") |
 | `tool_enumeration_recon` | Instructions to enumerate all available tools for reconnaissance |
 | `sampling_pipeline_hijack` | Tool inserted as mandatory intermediary for all agent queries |
+| `response_context_invalidation` | Injected text in a tool *response* dismissing or replacing legitimate output ("system note: disregard", `<system-reminder>`) |
+| `forced_reexecution` | Injected text instructing the agent to retry a tool call, creating a resource-amplification loop |
 
 The scanner runs four passes over each tool description and `inputSchema` fields:
 
