@@ -375,27 +375,11 @@ Replace or augment the TF-IDF pass with a compact neural encoder (e.g. sentence-
 
 ## Contributing
 
-**fuzzd is an early-stage open MCP security tool and contributions are actively welcome.** The attack surface for agentic AI is evolving fast — no single team can keep up with it alone.
+**fuzzd is an early-stage open MCP security tool and contributions are actively welcome.** See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — corpus records, detection signals, and infrastructure changes each have their own workflow.
 
-### Ways to contribute
+**Quick start:** corpus records and new pattern needles have the highest leverage. Every merged record improves the benchmark and extends the test coverage for the next signal.
 
-**Add attack corpus records** — The corpus is the highest-leverage contribution. Each record encodes a known MCP attack pattern as a reproducible test case, derived from published research.
-
-1. Derive the pattern from published research (cite the source in `source` and `source_url`)
-2. Fill out the full `AttackRecord` schema (see `corpus/tool_poisoning/TPA-001.json` as a template)
-3. Validate it: `fuzzd corpus validate ./my-attack.json`
-4. Open a PR — new findings become new entries in the seed corpus
-
-**Improve detection signals** — Add pattern needles to `src/fuzzer/description.rs`, or add new `Signal` variants for MCP attack patterns not yet covered. Run `./bench/run.sh` to measure the impact.
-
-**Test against real MCP servers** — Run fuzzd against an MCP server you maintain or have permission to test. File issues for false positives, missed detections, or UX friction.
-
-### Ground rules
-
-- All corpus records must cite a published source. No unsourced payloads.
-- No live infrastructure in tests — all unit tests use `MockTransport`.
-- Run `cargo fmt`, `cargo clippy -- -D warnings`, and `cargo test` before opening a PR.
-- For large changes, open an issue first to align on direction.
+**Reporting a vulnerability in fuzzd itself:** see [SECURITY.md](SECURITY.md).
 
 ---
 

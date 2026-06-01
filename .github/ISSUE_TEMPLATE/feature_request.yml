@@ -1,0 +1,63 @@
+name: Feature request
+description: Propose a new detection signal, CLI feature, or infrastructure improvement.
+labels: ["type/feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For new detection signals, include the attack research that motivates the signal.
+        fuzzd does not add signals without a published attack to anchor them.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What attack class or workflow gap does this address? Be specific.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        For detection signals: name the signal, describe the pattern needles or heuristic,
+        and cite the attack research.
+        For CLI/infra: describe the interface change and the use case it enables.
+    validations:
+      required: true
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research basis
+      description: |
+        Link to the paper, CVE, or security research that documents this attack class.
+        Signals without a published basis will be deferred until corpus evidence accumulates.
+    validations:
+      required: false
+
+  - type: textarea
+    id: benchmark
+    attributes:
+      label: Expected benchmark impact
+      description: |
+        Which MCPTox risk category does this affect? What detection rate improvement do you
+        expect? If you've run `./bench/run.sh` against a prototype, paste the result.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Feature type
+      options:
+        - New detection signal
+        - New corpus records
+        - CLI / output format
+        - Protocol / transport
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
