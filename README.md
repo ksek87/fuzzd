@@ -24,9 +24,9 @@ It operates at the **tool boundary layer** — scanning `tool.description` field
 
 ```bash
 # Pre-built binaries for Linux x86_64, macOS (Intel + Apple Silicon), Windows x86_64
-# available from v0.8 at https://github.com/ksek87/fuzzd/releases
+# available from v0.12.0 at https://github.com/ksek87/fuzzd/releases
 
-# Install from source (current)
+# Install from source
 cargo install --git https://github.com/ksek87/fuzzd
 
 # Scan MCP tool definitions for poison patterns

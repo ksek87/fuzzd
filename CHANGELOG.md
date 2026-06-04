@@ -6,9 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 **MAJOR** = breaking CLI/API change; **MINOR** = new signals or detection capabilities; **PATCH** = bug fixes and performance improvements.
 
+Releases are git-tagged and carry pre-built binaries from **v0.12.0** onward. Entries below v0.12.0 document pre-tag development history and are not individually downloadable. Roadmap *themes* (e.g. "Neural Semantic Layer") are tracked independently of release numbers — see [issue #26](https://github.com/ksek87/fuzzd/issues/26).
+
 ---
 
 ## [Unreleased]
+
+_Nothing yet._
+
+---
+
+## [0.12.0] — 2026-06-04
+
+First git-tagged release with pre-built binaries (Linux x86_64, macOS x86_64 + aarch64, Windows x86_64).
 
 ### Added
 - FUZZD-022 `ResponseContextInvalidation` — detects injected text in tool responses that dismisses legitimate output (`system note:`, `<system-reminder>`, "actual instructions follow"). Anchored to CVE-2025-55284 and GH anthropics/claude-code#22915; formalised as *Observation Injection* by WithSecure Labs (2023).
@@ -190,15 +200,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 
 ---
 
-[Unreleased]: https://github.com/ksek87/fuzzd/compare/v0.11.0...HEAD
-[0.11.0]: https://github.com/ksek87/fuzzd/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/ksek87/fuzzd/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/ksek87/fuzzd/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/ksek87/fuzzd/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/ksek87/fuzzd/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/ksek87/fuzzd/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/ksek87/fuzzd/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/ksek87/fuzzd/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/ksek87/fuzzd/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/ksek87/fuzzd/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/ksek87/fuzzd/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ksek87/fuzzd/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/ksek87/fuzzd/releases/tag/v0.12.0
+
+<!-- Versions below v0.12.0 predate git tagging and have no comparable release ref. -->
+
