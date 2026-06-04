@@ -1,6 +1,6 @@
 [package]
 name = "fuzzd"
-version = "0.1.0"
+version = "0.12.0"
 edition = "2021"
 description = "Adversarial fuzzer for MCP servers and agentic tool surfaces"
 license = "MIT"
