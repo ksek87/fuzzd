@@ -12,6 +12,18 @@ categories = ["command-line-utilities", "development-tools::testing"]
 name = "fuzzd"
 path = "src/main.rs"
 
+# Test-only MCP reference server, driven by the end-to-end integration tests in
+# tests/audit_stdio.rs. Gated behind `test-fixtures` so it is never built into a
+# release (release.yml runs `cargo build --release` with no features); CI's
+# `cargo test --all-features` / `cargo clippy --all-features` build and lint it.
+[[bin]]
+name = "reference_server"
+path = "tests/fixtures/reference_server.rs"
+required-features = ["test-fixtures"]
+
+[features]
+test-fixtures = []
+
 [dependencies]
 aho-corasick = "1"
 clap = { version = "4", features = ["derive"] }
