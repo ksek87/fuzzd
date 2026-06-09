@@ -60,8 +60,7 @@ fn scan_emits_complete_valid_sarif_on_the_blocking_path() {
     let out = run_scan("vulnerable_tools.json", "sarif");
     assert_eq!(out.status.code(), Some(1));
 
-    let sarif: Value =
-        serde_json::from_slice(&out.stdout).expect("SARIF on the blocking path must be complete JSON");
+    let sarif: Value = serde_json::from_slice(&out.stdout).expect("complete SARIF JSON");
     assert_eq!(sarif["version"], "2.1.0");
     let driver = &sarif["runs"][0]["tool"]["driver"];
     assert_eq!(driver["name"], "fuzzd");
