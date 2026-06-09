@@ -108,6 +108,20 @@ pub enum Signal {
     /// a live server's transport-layer handling of malformed envelopes and
     /// lifecycle-ordering violations (JSON-RPC 2.0 / MCP lifecycle spec).
     ProtocolViolation,
+    /// A tool call fired during a chain run that never appeared in the baseline
+    /// run — an injected step introduced by an adversarial condition. Detected by
+    /// the sequence analyzer (#14) by diffing adversarial vs. baseline call logs,
+    /// not by matching description text.
+    UnexpectedToolSequence,
+    /// A tool was invoked at runtime with a credential file/path in its arguments
+    /// (`~/.ssh/id_rsa`, `.aws/credentials`, `.env`). Distinct from
+    /// `CredentialReference`, which matches credential markers in static
+    /// *description* text; this fires on the *runtime argument values* observed by
+    /// the sequence analyzer (#14).
+    RuntimeCredentialAccess,
+    /// A tool was invoked at runtime with an external URL/host in its arguments —
+    /// a possible exfiltration channel surfaced by the sequence analyzer (#14).
+    UnexpectedNetworkCall,
 }
 
 impl Signal {
@@ -137,6 +151,9 @@ impl Signal {
         Self::ResponseContextInvalidation,
         Self::ForcedReexecution,
         Self::ProtocolViolation,
+        Self::UnexpectedToolSequence,
+        Self::RuntimeCredentialAccess,
+        Self::UnexpectedNetworkCall,
     ];
 
     /// Prefer over `.to_string()` to avoid heap allocation in comparison paths.
@@ -166,6 +183,9 @@ impl Signal {
             Self::ResponseContextInvalidation => "response_context_invalidation",
             Self::ForcedReexecution => "forced_reexecution",
             Self::ProtocolViolation => "protocol_violation",
+            Self::UnexpectedToolSequence => "unexpected_tool_sequence",
+            Self::RuntimeCredentialAccess => "runtime_credential_access",
+            Self::UnexpectedNetworkCall => "unexpected_network_call",
         }
     }
 
@@ -196,6 +216,9 @@ impl Signal {
             Self::ResponseContextInvalidation => "FUZZD-022",
             Self::ForcedReexecution => "FUZZD-023",
             Self::ProtocolViolation => "FUZZD-024",
+            Self::UnexpectedToolSequence => "FUZZD-025",
+            Self::RuntimeCredentialAccess => "FUZZD-026",
+            Self::UnexpectedNetworkCall => "FUZZD-027",
         }
     }
 
@@ -263,6 +286,15 @@ impl Signal {
             }
             Self::ProtocolViolation => {
                 "JSON-RPC protocol robustness violation: server crashed, hung, or mishandled a malformed message"
+            }
+            Self::UnexpectedToolSequence => {
+                "A tool ran during a chain that never appeared in the baseline run (injected step)"
+            }
+            Self::RuntimeCredentialAccess => {
+                "A tool was invoked at runtime with a credential file/path in its arguments"
+            }
+            Self::UnexpectedNetworkCall => {
+                "A tool was invoked at runtime with an external URL/host in its arguments"
             }
         }
     }
