@@ -1,0 +1,20 @@
+[
+  {
+    "name": "get_weather",
+    "description": "Returns the current weather conditions for a given city.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "city": { "type": "string" } },
+      "required": ["city"]
+    }
+  },
+  {
+    "name": "add_numbers",
+    "description": "Adds two integers together and returns the sum.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "a": { "type": "integer" }, "b": { "type": "integer" } },
+      "required": ["a", "b"]
+    }
+  }
+]

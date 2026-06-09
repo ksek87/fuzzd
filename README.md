@@ -328,48 +328,53 @@ fuzzd/
 
 ## Roadmap
 
-| Stage | Milestone | Status |
-|---|---|---|
-| 1 | v0.1 — Protocol layer (MCP/JSON-RPC over stdio + HTTP/SSE) | ✅ Done |
-| 2 | v0.2 — Corpus loader + seed attack records | ✅ Done |
-| 3 | v0.3 — Static description scanner (tool poisoning detection) | ✅ Done |
-| 4 | v0.4 — Argument fuzzer (boundary mutation) | ✅ Done |
-| 5 | v0.5 — MCPTox/MCPSecBench corpus expansion (27 records) | ✅ Done |
-| 6 | v0.6 — Observer + response scanner (prompt injection in tool output) | ✅ Done |
-| 7 | v0.7 — SARIF/JSON/Markdown reporter, wired audit command, benchmark subcommand | ✅ Done |
-| 8 | v0.8 — Suppression workflow (stable finding IDs, suppression file, GitHub Code Scanning) | ✅ Done |
-| 9 | v0.9 — Coverage completeness (schema field scanning, ANSI escape, new signal classes) | ✅ Done |
-| 10 | v0.10 — Semantic detection layer (TF-IDF + structural + verb-synonym passes) | ✅ Done |
-| 11 | v0.11 — Coverage + perf (soft-prereq needles, Copy traits, single-pass TF-IDF) | ✅ Done |
-| 11a | v0.11a — GitHub Action (Marketplace) | 🔜 Planned |
-| 12 | v0.12 — Neural embedding semantic layer | 🔜 Planned |
-| 13 | v0.13 — Package-level scanning (`--package @scope/mcp-server`) | 🔜 Planned |
-| 14 | v0.14 — Python SDK + framework adapters (PyO3 + maturin) | 🔜 Planned |
-| 15 | v0.15 — npx wrapper (`npx fuzzd`) | 🔜 Planned |
-| 16 | v0.16 — `fuzzd validate` evaluation mode | 🔜 Planned |
-| 17 | v0.17 — Chain fuzzer (stateful multi-step attack simulation) | 🔜 Planned |
-| 18 | v1.0 — Protocol fuzzer + integration test suite | 🔜 Planned |
-| 19 | v2.0 — Capability escape tester | 🔜 Planned |
+> **Themes ≠ release numbers.** Roadmap work is organised by *theme* (a body of
+> work that may span several releases), not by a fixed version ladder. A release
+> is tagged and numbered when it ships. Current release: **v0.12.0** — the first
+> git-tagged release with pre-built cross-platform binaries. The canonical,
+> always-current roadmap lives in [issue #26](https://github.com/ksek87/fuzzd/issues/26).
 
-### Upcoming milestone detail
+| Capability | Status |
+|---|---|
+| Static tool-poison scanning (description + `inputSchema`, 4 passes, 23 signals) | ✅ Shipped |
+| Response-phase injection scanning | ✅ Shipped |
+| Argument boundary / injection fuzzing | ✅ Shipped |
+| Corpus + schema + loader | ✅ Shipped |
+| SARIF / JSON / Markdown reporting + suppression | ✅ Shipped |
+| Semantic detection (TF-IDF archetypes) — 90.7% MCPTox, 0 FP | ✅ Shipped |
+| End-to-end integration tests (live stdio server + CLI exit-code/SARIF gates) | ✅ Shipped |
+| **Distribution** — tagged release + binaries + GitHub Action | 🔜 Active |
+| **Agentic chain fuzzing** — stateful, multi-step, cross-tool | 🟡 Committed — not yet built |
+| Neural semantic detection | ⏸ Gated spike (go/no-go before any build) |
+| Capability escape (cross-tool boundary) | 🔭 Future |
+| OpenAPI / non-MCP tool surfaces | 🔭 Future |
 
-**v0.10 — Semantic detection layer** *(done)*
-Four-pass scanner: Aho-Corasick (161 needles), structural sliding-window heuristic, GloVe 50d semantic verb scanner, and TF-IDF cosine similarity against six abstract archetypes. Overall detection rose from 84.7% → 89.0% with 0 new false positives.
+### Theme detail
 
-**v0.11 — Coverage + performance** *(done)*
-Six new AC needles for soft-modal fake-prerequisite enforcement ("failure to do so will", "skipping this step will cause"). `Signal` and `Severity` derive `Copy` — eliminates `.clone()` in the hot-path scanner. TF-IDF reduced from two O(tokens) passes to one. Detection: 89.0% → 90.7%.
+**Distribution** *(active)*
+Make fuzzd installable and CI-droppable, backing the "90.7%, production-grade"
+claims with real artifacts. v0.12.0 ships cross-platform binaries (linux x86_64,
+macOS x86_64 + aarch64, windows x86_64) via `release.yml`. Next: an in-repo
+composite GitHub Action ([#66](https://github.com/ksek87/fuzzd/issues/66)) that
+runs `fuzzd scan` and uploads SARIF to Code Scanning, with upload-before-fail
+ordering so findings reach GitHub even when they gate the build. (Extraction to a
+standalone `ksek87/fuzzd-action` Marketplace repo is deferred to a later cycle.)
 
-**v0.11a — GitHub Action (Marketplace)**
-First-class `uses: ksek87/fuzzd-action@v1` action published to the GitHub Actions Marketplace. One-line integration for any MCP server repo — no binary install, no custom YAML step.
+**Agentic chain fuzzing** *(committed — not yet built)*
+The stateful, multi-step, cross-tool attacks the static scanner cannot see — the
+capability the positioning above promises. Requires a real baseline-diffing
+*sequence* observer and an `analyzer/` module that do not exist yet; the shipped
+`runner/observer.rs` is a response-scanner wrapper. Tracked in
+[#14](https://github.com/ksek87/fuzzd/issues/14)–[#17](https://github.com/ksek87/fuzzd/issues/17).
 
-**v0.12 — Neural embedding semantic layer**
-Replace or augment the TF-IDF pass with a compact neural encoder (e.g. sentence-transformers `all-MiniLM-L6-v2` or a purpose-trained MCP-attack model). Embeddings for the six attack archetypes are stored as static binary data compiled into the binary — no model download on first run. Targets the current coverage gaps in Privacy Leakage (73.1%) and Message Hijacking (60.0%) where surface-form vocabulary enumeration cannot reach abstract paraphrase variants.
-
-**v0.13 — Package-level scanning**
-`fuzzd audit --package @scope/mcp-server` installs the package, spins up the server, enumerates the live tool list, and runs the full scanner — no intermediate JSON file needed. Covers the pre-adoption audit use case for teams pulling from MCP registries (Smithery, mcp.so).
-
-**v0.14 — Python SDK**
-`pip install fuzzd` with a `fuzzd.scan(tools)` callable that accepts LangChain, LlamaIndex, AutoGen, and LangGraph tool lists directly. Built via **PyO3 + maturin**: the Rust core compiled as a native Python extension module — full performance, no Python reimplementation.
+**Neural semantic detection** *(gated spike)*
+A compact neural encoder *might* close the Privacy Leakage (73.1%) and Message
+Hijacking (60.0%) recall gaps — but only if a research spike
+([#52](https://github.com/ksek87/fuzzd/issues/52)) clears an explicit
+kill-criterion gate (recall gains, 0 FP, ≤50ms, ≤50MB, **cross-platform
+determinism**). Neural adds a model + runtime dependency, trading away the
+zero-dependency, deterministic, CI-safe properties currently sold as advantages;
+the spike must justify that trade or the theme is dropped.
 
 ---
 
