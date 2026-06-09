@@ -19,11 +19,13 @@ pub mod sequence;
 pub mod severity;
 pub mod signals;
 
+use std::collections::HashSet;
+
 use crate::corpus::Severity;
 use crate::fuzzer::{Finding, Signal};
 
 use self::sequence::{diff, SequenceLog};
-use self::signals::{scan_diff, scan_log, ChainSignal};
+use self::signals::{scan_diff, scan_log, Anomaly, ChainSignal};
 
 /// A detected sequence anomaly, with the context needed to reproduce it.
 #[derive(Debug, Clone, PartialEq)]
@@ -80,31 +82,28 @@ impl From<ChainSignal> for Signal {
 pub fn analyze(adversarial: &SequenceLog, baseline: Option<&SequenceLog>) -> Vec<SequenceFinding> {
     let mut hits = scan_log(adversarial);
     if let Some(base) = baseline {
-        hits.extend(scan_diff(adversarial, &diff(base, adversarial)));
+        hits.extend(scan_diff(&diff(base, adversarial)));
     }
 
+    let mut seen: HashSet<(usize, ChainSignal)> = HashSet::new();
     let mut findings: Vec<SequenceFinding> = Vec::new();
-    for (step, signal, evidence) in hits {
-        // Dedup exact (step, signal) repeats so the same anomaly isn't double-reported.
-        if findings
-            .iter()
-            .any(|f| f.step == step && f.signal == signal)
-        {
-            continue;
+    for Anomaly {
+        step,
+        signal,
+        evidence,
+        tool,
+    } in hits
+    {
+        if seen.insert((step, signal)) {
+            findings.push(SequenceFinding {
+                signal,
+                tool,
+                step,
+                severity: signal.score().severity(),
+                evidence,
+                reproduction: reproduction(adversarial, step),
+            });
         }
-        let tool = adversarial
-            .calls()
-            .get(step)
-            .map(|c| c.tool.clone())
-            .unwrap_or_default();
-        findings.push(SequenceFinding {
-            signal,
-            tool,
-            step,
-            severity: signal.score().severity(),
-            evidence,
-            reproduction: reproduction(adversarial, step),
-        });
     }
     findings
 }

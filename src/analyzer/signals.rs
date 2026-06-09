@@ -7,11 +7,11 @@
 
 use serde_json::Value;
 
-use crate::analyzer::sequence::{CallRecord, SequenceDiff, SequenceLog};
+use crate::analyzer::sequence::{SequenceDiff, SequenceLog};
 use crate::analyzer::severity::{Impact, Scope, Score};
 
 /// A sequence anomaly class.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChainSignal {
     /// A tool fired that never ran in the baseline — an injected step.
     UnexpectedToolSequence,
@@ -50,15 +50,14 @@ impl ChainSignal {
             },
         }
     }
+}
 
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::UnexpectedToolSequence => "unexpected_tool_sequence",
-            Self::CredentialPathAccess => "credential_path_access",
-            Self::ExternalNetworkCall => "external_network_call",
-            Self::CrossToolContamination => "cross_tool_contamination",
-        }
-    }
+/// A detected sequence anomaly, ready for promotion to a [`SequenceFinding`].
+pub struct Anomaly {
+    pub step: usize,
+    pub signal: ChainSignal,
+    pub evidence: String,
+    pub tool: String,
 }
 
 /// Credential file/path markers that should never appear in benign tool args.
@@ -75,104 +74,116 @@ const CREDENTIAL_MARKERS: &[&str] = &[
     "/etc/shadow",
 ];
 
-/// Whether `s` references a credential file/path.
-fn is_credential_path(s: &str) -> bool {
+/// Classify a string leaf for both checks in one lowercase pass.
+/// Returns `(is_credential_path, is_external_url)`.
+fn classify_leaf(s: &str) -> (bool, bool) {
     let lower = s.to_ascii_lowercase();
-    CREDENTIAL_MARKERS.iter().any(|m| lower.contains(m))
+    let is_cred = CREDENTIAL_MARKERS.iter().any(|m| lower.contains(m));
+    let is_url = {
+        let rest = lower
+            .strip_prefix("http://")
+            .or_else(|| lower.strip_prefix("https://"));
+        matches!(rest, Some(h)
+            if !h.starts_with("localhost")
+                && !h.starts_with("127.0.0.1")
+                && !h.starts_with("[::1]"))
+    };
+    (is_cred, is_url)
 }
 
-/// Whether `s` is an external `http(s)` URL (not localhost / loopback).
-fn is_external_url(s: &str) -> bool {
-    let lower = s.to_ascii_lowercase();
-    let rest = lower
-        .strip_prefix("http://")
-        .or_else(|| lower.strip_prefix("https://"));
-    match rest {
-        Some(host) => {
-            !host.starts_with("localhost")
-                && !host.starts_with("127.0.0.1")
-                && !host.starts_with("[::1]")
-        }
-        None => false,
+/// Walk a JSON value depth-first, setting `cred`/`url` on first match.
+/// Short-circuits once both flags are true.
+fn scan_value(val: &Value, cred: &mut bool, url: &mut bool) {
+    if *cred && *url {
+        return;
     }
-}
-
-/// Collect every string leaf in a JSON value (depth-first).
-fn string_leaves<'a>(v: &'a Value, out: &mut Vec<&'a str>) {
-    match v {
-        Value::String(s) => out.push(s),
-        Value::Array(items) => items.iter().for_each(|i| string_leaves(i, out)),
-        Value::Object(map) => map.values().for_each(|i| string_leaves(i, out)),
+    match val {
+        Value::String(s) => {
+            let (c, u) = classify_leaf(s);
+            *cred |= c;
+            *url |= u;
+        }
+        Value::Array(items) => {
+            for i in items {
+                scan_value(i, cred, url);
+                if *cred && *url {
+                    return;
+                }
+            }
+        }
+        Value::Object(map) => {
+            for i in map.values() {
+                scan_value(i, cred, url);
+                if *cred && *url {
+                    return;
+                }
+            }
+        }
         _ => {}
     }
 }
 
-/// Whether any string leaf in a call's args satisfies `pred`.
-fn any_arg_leaf(call: &CallRecord, pred: impl Fn(&str) -> bool) -> bool {
-    let mut leaves = Vec::new();
-    string_leaves(&call.args, &mut leaves);
-    leaves.into_iter().any(pred)
+/// Scan a call's args for credential paths and external URLs in a single pass.
+fn scan_args(val: &Value) -> (bool, bool) {
+    let (mut cred, mut url) = (false, false);
+    scan_value(val, &mut cred, &mut url);
+    (cred, url)
 }
 
 /// Single-sequence checks: anomalies visible from the adversarial run alone.
-pub fn scan_log(log: &SequenceLog) -> Vec<(usize, ChainSignal, String)> {
+pub fn scan_log(log: &SequenceLog) -> Vec<Anomaly> {
     let mut hits = Vec::new();
     for (i, call) in log.calls().iter().enumerate() {
-        if any_arg_leaf(call, is_credential_path) {
-            hits.push((
-                i,
-                ChainSignal::CredentialPathAccess,
-                format!(
+        let (has_cred, has_url) = scan_args(&call.args);
+        if has_cred {
+            hits.push(Anomaly {
+                step: i,
+                signal: ChainSignal::CredentialPathAccess,
+                evidence: format!(
                     "`{}` was invoked with a credential path in its arguments",
                     call.tool
                 ),
-            ));
+                tool: call.tool.clone(),
+            });
         }
-        if any_arg_leaf(call, is_external_url) {
-            hits.push((
-                i,
-                ChainSignal::ExternalNetworkCall,
-                format!(
+        if has_url {
+            hits.push(Anomaly {
+                step: i,
+                signal: ChainSignal::ExternalNetworkCall,
+                evidence: format!(
                     "`{}` was invoked with an external URL in its arguments",
                     call.tool
                 ),
-            ));
+                tool: call.tool.clone(),
+            });
         }
     }
     hits
 }
 
 /// Baseline-diff checks: anomalies only visible by comparing the two runs.
-pub fn scan_diff(
-    adversarial: &SequenceLog,
-    diff: &SequenceDiff,
-) -> Vec<(usize, ChainSignal, String)> {
-    let index_of = |target: &CallRecord| {
-        adversarial
-            .calls()
-            .iter()
-            .position(|c| std::ptr::eq(c, target))
-            .unwrap_or(0)
-    };
+pub fn scan_diff(diff: &SequenceDiff) -> Vec<Anomaly> {
     let mut hits = Vec::new();
-    for call in &diff.injected {
-        hits.push((
-            index_of(call),
-            ChainSignal::UnexpectedToolSequence,
-            format!("`{}` ran but never appeared in the baseline run", call.tool),
-        ));
+    for (idx, call) in &diff.injected {
+        hits.push(Anomaly {
+            step: *idx,
+            signal: ChainSignal::UnexpectedToolSequence,
+            evidence: format!("`{}` ran but never appeared in the baseline run", call.tool),
+            tool: call.tool.clone(),
+        });
     }
-    for call in &diff.diverged {
-        // A diverged call only matters if the change introduced a sensitive value.
-        if any_arg_leaf(call, is_credential_path) || any_arg_leaf(call, is_external_url) {
-            hits.push((
-                index_of(call),
-                ChainSignal::CrossToolContamination,
-                format!(
+    for (idx, call) in &diff.diverged {
+        let (has_cred, has_url) = scan_args(&call.args);
+        if has_cred || has_url {
+            hits.push(Anomaly {
+                step: *idx,
+                signal: ChainSignal::CrossToolContamination,
+                evidence: format!(
                     "`{}` was called with sensitive arguments not seen in the baseline run",
                     call.tool
                 ),
-            ));
+                tool: call.tool.clone(),
+            });
         }
     }
     hits
@@ -181,7 +192,7 @@ pub fn scan_diff(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::sequence::{diff, CallRecord};
+    use crate::analyzer::sequence::{diff, CallRecord, SequenceLog};
     use serde_json::json;
 
     fn log(pairs: &[(&str, Value)]) -> SequenceLog {
@@ -193,7 +204,7 @@ mod tests {
         let l = log(&[("read_file", json!({"path": "/home/u/.ssh/id_rsa"}))]);
         let hits = scan_log(&l);
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].1, ChainSignal::CredentialPathAccess);
+        assert_eq!(hits[0].signal, ChainSignal::CredentialPathAccess);
     }
 
     #[test]
@@ -203,7 +214,9 @@ mod tests {
             json!({"body": {"cb": "https://evil.example.com/x"}}),
         )]);
         let hits = scan_log(&l);
-        assert!(hits.iter().any(|h| h.1 == ChainSignal::ExternalNetworkCall));
+        assert!(hits
+            .iter()
+            .any(|h| h.signal == ChainSignal::ExternalNetworkCall));
     }
 
     #[test]
@@ -226,10 +239,10 @@ mod tests {
             ("send_email", json!({"to": "x@y.com"})),
         ]);
         let d = diff(&baseline, &adversarial);
-        let hits = scan_diff(&adversarial, &d);
+        let hits = scan_diff(&d);
         assert!(hits
             .iter()
-            .any(|h| h.1 == ChainSignal::UnexpectedToolSequence));
+            .any(|h| h.signal == ChainSignal::UnexpectedToolSequence));
     }
 
     #[test]
@@ -237,10 +250,10 @@ mod tests {
         let baseline = log(&[("read_file", json!({"path": "notes.txt"}))]);
         let adversarial = log(&[("read_file", json!({"path": "/root/.ssh/id_rsa"}))]);
         let d = diff(&baseline, &adversarial);
-        let hits = scan_diff(&adversarial, &d);
+        let hits = scan_diff(&d);
         assert!(hits
             .iter()
-            .any(|h| h.1 == ChainSignal::CrossToolContamination));
+            .any(|h| h.signal == ChainSignal::CrossToolContamination));
     }
 
     #[test]
@@ -248,6 +261,6 @@ mod tests {
         let baseline = log(&[("read_file", json!({"path": "a.txt"}))]);
         let adversarial = log(&[("read_file", json!({"path": "b.txt"}))]);
         let d = diff(&baseline, &adversarial);
-        assert!(scan_diff(&adversarial, &d).is_empty());
+        assert!(scan_diff(&d).is_empty());
     }
 }

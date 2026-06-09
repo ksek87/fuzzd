@@ -71,14 +71,16 @@ impl SequenceLog {
 
 /// The difference between a baseline run and an adversarial run, from the
 /// adversarial run's perspective.
+/// Each entry pairs a call with its index in the adversarial sequence, so
+/// consumers don't have to recover the position later.
 #[derive(Debug, Default, PartialEq)]
 pub struct SequenceDiff<'a> {
     /// Calls whose tool never appeared in the baseline — behavior the adversarial
     /// condition *introduced*.
-    pub injected: Vec<&'a CallRecord>,
+    pub injected: Vec<(usize, &'a CallRecord)>,
     /// Calls to a tool that *did* appear in the baseline, but with different
     /// arguments — behavior the adversarial condition *altered*.
-    pub diverged: Vec<&'a CallRecord>,
+    pub diverged: Vec<(usize, &'a CallRecord)>,
 }
 
 /// Diff an adversarial run against a baseline. A call is `injected` if its tool
@@ -86,15 +88,15 @@ pub struct SequenceDiff<'a> {
 /// call to the same tool used identical arguments.
 pub fn diff<'a>(baseline: &SequenceLog, adversarial: &'a SequenceLog) -> SequenceDiff<'a> {
     let mut out = SequenceDiff::default();
-    for call in adversarial.calls() {
+    for (i, call) in adversarial.calls().iter().enumerate() {
         if !baseline.contains_tool(&call.tool) {
-            out.injected.push(call);
+            out.injected.push((i, call));
         } else if !baseline
             .calls()
             .iter()
             .any(|b| b.tool == call.tool && b.args == call.args)
         {
-            out.diverged.push(call);
+            out.diverged.push((i, call));
         }
     }
     out
@@ -155,7 +157,8 @@ mod tests {
         ]);
         let d = diff(&baseline, &adversarial);
         assert_eq!(d.injected.len(), 1);
-        assert_eq!(d.injected[0].tool, "send_email");
+        assert_eq!(d.injected[0].0, 1);
+        assert_eq!(d.injected[0].1.tool, "send_email");
         assert!(d.diverged.is_empty());
     }
 
@@ -166,7 +169,7 @@ mod tests {
         let d = diff(&baseline, &adversarial);
         assert!(d.injected.is_empty());
         assert_eq!(d.diverged.len(), 1);
-        assert_eq!(d.diverged[0].tool, "read_file");
+        assert_eq!(d.diverged[0].1.tool, "read_file");
     }
 
     #[test]
