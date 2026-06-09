@@ -146,35 +146,62 @@ async fn main() -> Result<()> {
 }
 
 async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs) -> Result<()> {
-    harness.initialize().await?;
-    let tools = harness.enumerate_tools().await?;
-
     // Deduplicate so the same module flag passed twice doesn't double-scan.
     let unique_attacks: HashSet<&cli::AttackModule> = args.attacks.iter().collect();
     let mut findings = Vec::new();
+    // Tools enumerated for the report header; stays 0 for protocol-only runs that
+    // never enumerate (e.g. fuzzing a server that won't complete initialize).
+    let mut tools_scanned = 0usize;
 
-    // Static analysis — no live connection needed after enumeration.
-    if unique_attacks.contains(&cli::AttackModule::ToolPoisoning) {
-        findings.extend(DescriptionScanner::scan(&tools));
-    }
-
-    // Dynamic analysis — argument boundary fuzzer with response scanning.
-    let mut observer = Observer::new(harness);
-    if unique_attacks.contains(&cli::AttackModule::Argument) {
-        for tool in &tools {
-            for case in ArgumentFuzzer::fuzz(&tool.input_schema) {
-                if let Err(e) = observer.call_tool(&tool.name, Some(case.args)).await {
-                    eprintln!("warn: fuzz {}/{}: {e}", tool.name, case.label);
-                }
+    // Protocol fuzzing re-spawns the server fresh per case (lifecycle probes need
+    // a clean session) and is independent of the shared session — it must run even
+    // against a server that never completes the initialize handshake, since probing
+    // exactly that is its job. stdio only.
+    if unique_attacks.contains(&cli::AttackModule::Protocol) {
+        match args.cmd.as_deref() {
+            Some(cmd) => findings.extend(fuzzer::protocol::fuzz_stdio(cmd).await?),
+            None => {
+                eprintln!("warning: protocol fuzzing requires a spawnable --cmd (stdio) — skipping")
             }
         }
-        findings.extend(observer.all_findings().cloned());
     }
-    observer.close().await?;
+
+    // The static (tool-poisoning) and dynamic (argument) modules need the live
+    // tool list, so they require a successful handshake. Only pay for it when one
+    // of them is requested; otherwise close the unused transport.
+    let needs_tools = unique_attacks.contains(&cli::AttackModule::ToolPoisoning)
+        || unique_attacks.contains(&cli::AttackModule::Argument);
+    if needs_tools {
+        harness.initialize().await?;
+        let tools = harness.enumerate_tools().await?;
+        tools_scanned = tools.len();
+
+        if unique_attacks.contains(&cli::AttackModule::ToolPoisoning) {
+            findings.extend(DescriptionScanner::scan(&tools));
+        }
+
+        // Dynamic analysis — argument boundary fuzzer with response scanning.
+        let mut observer = Observer::new(harness);
+        if unique_attacks.contains(&cli::AttackModule::Argument) {
+            for tool in &tools {
+                for case in ArgumentFuzzer::fuzz(&tool.input_schema) {
+                    if let Err(e) = observer.call_tool(&tool.name, Some(case.args)).await {
+                        eprintln!("warn: fuzz {}/{}: {e}", tool.name, case.label);
+                    }
+                }
+            }
+            findings.extend(observer.all_findings().cloned());
+        }
+        observer.close().await?;
+    } else {
+        harness.close().await?;
+    }
 
     for module in &unique_attacks {
         match module {
-            cli::AttackModule::ToolPoisoning | cli::AttackModule::Argument => {}
+            cli::AttackModule::ToolPoisoning
+            | cli::AttackModule::Argument
+            | cli::AttackModule::Protocol => {}
             other => eprintln!("warning: attack module '{other}' not yet implemented — skipping"),
         }
     }
@@ -182,7 +209,7 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     let suppress = SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
     apply_suppressions(&mut findings, &suppress);
 
-    reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
+    reporter::write_findings(&findings, tools_scanned, &args.output, args.out.as_deref())?;
     exit_if_blocking(&findings);
     Ok(())
 }

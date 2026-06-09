@@ -1,6 +1,7 @@
 pub mod argument;
 pub mod description;
 pub mod payloads;
+pub mod protocol;
 pub mod response;
 pub(crate) mod tfidf;
 
@@ -100,6 +101,13 @@ pub enum Signal {
     /// tokens). Serves as both a resource-exhaustion DoS and a cover channel that delays
     /// legitimate responses while side-payloads execute.
     ForcedReexecution,
+    /// A JSON-RPC protocol robustness violation detected by the protocol fuzzer:
+    /// the server crashed, hung, accepted a malformed message, or replied with a
+    /// non-JSON-RPC message instead of a well-formed error. Unlike the other
+    /// signals (which match patterns in tool text), this is produced by probing
+    /// a live server's transport-layer handling of malformed envelopes and
+    /// lifecycle-ordering violations (JSON-RPC 2.0 / MCP lifecycle spec).
+    ProtocolViolation,
 }
 
 impl Signal {
@@ -128,6 +136,7 @@ impl Signal {
         Self::SamplingPipelineHijack,
         Self::ResponseContextInvalidation,
         Self::ForcedReexecution,
+        Self::ProtocolViolation,
     ];
 
     /// Prefer over `.to_string()` to avoid heap allocation in comparison paths.
@@ -156,6 +165,7 @@ impl Signal {
             Self::SamplingPipelineHijack => "sampling_pipeline_hijack",
             Self::ResponseContextInvalidation => "response_context_invalidation",
             Self::ForcedReexecution => "forced_reexecution",
+            Self::ProtocolViolation => "protocol_violation",
         }
     }
 
@@ -185,6 +195,7 @@ impl Signal {
             Self::SamplingPipelineHijack => "FUZZD-021",
             Self::ResponseContextInvalidation => "FUZZD-022",
             Self::ForcedReexecution => "FUZZD-023",
+            Self::ProtocolViolation => "FUZZD-024",
         }
     }
 
@@ -249,6 +260,9 @@ impl Signal {
             }
             Self::ForcedReexecution => {
                 "Injected text that instructs the agent to retry a tool call, creating an execution loop"
+            }
+            Self::ProtocolViolation => {
+                "JSON-RPC protocol robustness violation: server crashed, hung, or mishandled a malformed message"
             }
         }
     }

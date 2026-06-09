@@ -12,7 +12,12 @@ Releases are git-tagged and carry pre-built binaries from **v0.12.0** onward. En
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- **JSON-RPC protocol edge-case fuzzer** (`fuzzer/protocol.rs`, #21) — the `protocol` attack module is now implemented (previously advertised in `--attacks` but a no-op). Sends malformed envelopes (missing `jsonrpc`, wrong version, non-scalar `id`, missing/unknown method, oversized method name) and lifecycle-ordering violations (`tools/call`/`tools/list` before `initialize`, second `initialize`) to a live stdio server, each against a freshly spawned session, and classifies the response: a well-formed JSON-RPC error is the only acceptable outcome; a crash is Critical, a hang High, a malformed/over-accepting reply Medium, an abrupt close Low.
+- FUZZD-024 `ProtocolViolation` signal — carries protocol-fuzzer findings through the existing reporter/SARIF pipeline.
+
+### Changed
+- `run_audit` no longer requires a successful `initialize`/`tools/list` handshake when only `--attacks protocol` is requested — protocol fuzzing must be able to probe a server that never completes initialization, since that is precisely its job.
 
 ---
 
