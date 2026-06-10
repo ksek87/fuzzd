@@ -190,6 +190,21 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         }
     }
 
+    // Peer-injection fuzzing: inject each TPA corpus record as a mock peer tool
+    // alongside the real server and detect it via static scan + sequence diff.
+    // Requires --cmd; uses the embedded corpus (TPA-paradigm records only).
+    if unique_attacks.contains(&cli::AttackModule::Peer) {
+        match args.cmd.as_deref() {
+            Some(cmd) => {
+                let corpus = corpus::Corpus::embedded();
+                findings.extend(fuzzer::peer::fuzz_peer_stdio(cmd, &corpus.records).await?);
+            }
+            None => {
+                eprintln!("warning: peer injection requires a spawnable --cmd (stdio) — skipping")
+            }
+        }
+    }
+
     // The static (tool-poisoning) and dynamic (argument) modules need the live
     // tool list, so they require a successful handshake. Only pay for it when one
     // of them is requested; otherwise close the unused transport.
@@ -226,7 +241,8 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
             cli::AttackModule::ToolPoisoning
             | cli::AttackModule::Argument
             | cli::AttackModule::Protocol
-            | cli::AttackModule::Chain => {}
+            | cli::AttackModule::Chain
+            | cli::AttackModule::Peer => {}
             other => eprintln!("warning: attack module '{other}' not yet implemented — skipping"),
         }
     }
