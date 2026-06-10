@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+mod analyzer;
 mod cli;
 mod corpus;
 mod fuzzer;

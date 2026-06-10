@@ -151,6 +151,32 @@ Every detection signal in fuzzd is anchored to published security research. This
 - Chen et al., *Malfunction Amplification via Tool Calling Chains* (arXiv:2407.20859, 2024) — forced re-execution increased agent failure rate from 15.3% to 59.4% across tested agent frameworks.
 - Liu et al., *Stealthy Resource Amplification via Tool Calling Chains* (arXiv:2601.10955, 2026) — forced re-fetch inflated per-query cost up to 658× (60,000+ tokens). Serves simultaneously as a resource-exhaustion DoS and a cover channel that delays legitimate responses while side-payloads execute.
 
+### FUZZD-024 `protocol_violation`
+**Pattern class:** Server crashes, hangs, or returns a malformed JSON-RPC response when presented with an edge-case or invalid message.  
+**Research basis:** Maloyan & Namiot, *Breaking the Protocol: Security Analysis of the Model Context Protocol* (2026) — identified three fundamental protocol-level vulnerabilities; improper handling of malformed messages is a known root cause of server crashes that can be triggered by injected tool calls. https://arxiv.org/abs/2601.17549  
+**Detection mechanism:** Protocol fuzzer (`fuzzer::protocol`) replays 13 edge-case JSON-RPC messages (missing `jsonrpc` field, invalid `id` types, oversized payloads, batch arrays, notifications with IDs) and classifies the server response as `GracefulError`, `AcceptedInvalid`, `MalformedResponse`, `ConnectionClosed`, `Timeout`, or `Crash`. The last four emit a finding.
+
+---
+
+### FUZZD-025 `unexpected_tool_sequence`
+**Pattern class:** A tool fires during a chain run that never appeared in the baseline run — an injected step introduced by adversarial peer tools.  
+**Research basis:** Wang et al. (MCPTox, 2025) Paradigm 3 (Persistent Instruction Injection) — cross-tool triggers instruct the model to call additional tools as side-effects; the injected call would be absent in a benign baseline. Invariant Labs (2024) — cross-tool contamination experiments where one tool's presence altered which other tools were invoked.  
+**Detection mechanism:** Chain-sequence analyzer (`analyzer`) diffs the adversarial `SequenceLog` against a baseline run; any tool absent from the baseline's call sequence is flagged.
+
+---
+
+### FUZZD-026 `runtime_credential_access`
+**Pattern class:** A tool is invoked at runtime with a credential file path in its arguments — exfiltration surfacing in the call chain rather than in static descriptions.  
+**Research basis:** Chen et al. (MCP-UPD, 2025) — Collection phase targets `~/.ssh`, `~/.aws`, `.env`, `.cursor/mcp.json`; the path appears as a *tool argument* at runtime, not in the description. CVE-2025-55284 — env-var exfiltration via injected system note that caused Claude Code to pass credential paths to tool calls.  
+**Detection mechanism:** Chain-sequence analyzer (`analyzer`) scans every call's JSON argument tree for credential path markers; fires independently of baseline comparison.
+
+---
+
+### FUZZD-027 `unexpected_network_call`
+**Pattern class:** A tool is invoked at runtime with an external URL/host in its arguments — data-exfiltration network calls surfacing in the call chain.  
+**Research basis:** Chen et al. (MCP-UPD, 2025) Disclosure phase — collected data sent via `curl` and HTTP webhooks to attacker-controlled hosts. Equixly (Feb 2026) — threat actors constructing HTTP requests to external infrastructure from within MCP tool calls. https://equixly.com/blog/2026/02/26/offensive-security-for-mcp-servers/  
+**Detection mechanism:** Chain-sequence analyzer (`analyzer`) scans every call's JSON argument tree for `http://` and `https://` URLs not targeting localhost/loopback; fires independently of baseline comparison.
+
 ---
 
 ## Architectural Decisions
@@ -190,15 +216,15 @@ Every detection signal in fuzzd is anchored to published security research. This
 |---|---|---|
 | Wang et al., *MCPTox* (2025) https://arxiv.org/abs/2508.14925 | 72.8% TPA success on 45 live servers; 3 paradigms; 10 risk categories | FUZZD-001, 005, 006, 007, 008, 009 |
 | Yang et al., *MCPSecBench* (2025) https://arxiv.org/pdf/2508.13220 | 11 attack types; CVE-2025-6514; compromised Claude, OpenAI, Cursor | FUZZD-010, 016 |
-| Chen et al., *MCP-UPD* (2025) https://arxiv.org/abs/2509.06572 | 3-phase parasitic attack; 8.7% of 12,230 tools vulnerable | FUZZD-002, 004, 014, 018 |
+| Chen et al., *MCP-UPD* (2025) https://arxiv.org/abs/2509.06572 | 3-phase parasitic attack; 8.7% of 12,230 tools vulnerable | FUZZD-002, 004, 014, 018, 026, 027 |
 | Liu et al., *MCP-SafetyBench* (ICLR 2026) https://arxiv.org/abs/2601.10955 | 20 attack types; most comprehensive benchmark | FUZZD-009, 019, 023 |
-| Invariant Labs, *MCP Injection Experiments* (2024) https://github.com/invariantlabs-ai/mcp-injection-experiments | `<IMPORTANT>` direct injection; WhatsApp hijack PoC; rug-pull via sentinel file | FUZZD-007, 010, 011, 012 |
+| Invariant Labs, *MCP Injection Experiments* (2024) https://github.com/invariantlabs-ai/mcp-injection-experiments | `<IMPORTANT>` direct injection; WhatsApp hijack PoC; rug-pull via sentinel file | FUZZD-007, 010, 011, 012, 025 |
 | Noma Security, *Invisible MCP Vulnerabilities* (2025) | Zero-width Unicode character injection | FUZZD-013 |
 | Trail of Bits, *ANSI Escape Code Injection* (Apr 2025) | ANSI sequences hide instructions from terminal rendering | FUZZD-015 |
 | Liu et al., *MCPLIB* (2025) https://arxiv.org/abs/2508.12538 | 31 attack types across 2,000+ real-world servers | FUZZD-016 |
-| Maloyan & Namiot, *Breaking the Protocol* (2026) https://arxiv.org/abs/2601.17549 | 3 fundamental protocol vulnerabilities; sampling endpoint hijack | FUZZD-021 |
+| Maloyan & Namiot, *Breaking the Protocol* (2026) https://arxiv.org/abs/2601.17549 | 3 fundamental protocol vulnerabilities; sampling endpoint hijack | FUZZD-021, 024 |
 | WithSecure Labs, *Observation Injection* (2023) | Formalised response-context invalidation as attack class | FUZZD-022 |
 | Chen et al., *Malfunction Amplification* (arXiv:2407.20859, 2024) | Forced re-execution raises agent failure rate 15.3% → 59.4% | FUZZD-023 |
 | CVE-2025-55284 | Env-var exfiltration via injected system note in Claude Code | FUZZD-022 |
 | Perez & Ribeiro, *Ignore Previous Prompt* (2022) https://arxiv.org/abs/2211.09527 | Taxonomy of prompt injection techniques including soft-language evasion | FUZZD-005, 008 |
-| Equixly, *Offensive Security for MCP Servers* (Feb 2026) | Real threat actors using MCP as attack orchestration framework | FUZZD-004, 017 |
+| Equixly, *Offensive Security for MCP Servers* (Feb 2026) | Real threat actors using MCP as attack orchestration framework | FUZZD-004, 017, 027 |

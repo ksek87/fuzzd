@@ -92,7 +92,9 @@ on all 485 entries so no regeneration step is needed.
 | Argument Hijacking | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 23 signals)
+## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 23 description signals)
+
+> **Total signals: 27.** FUZZD-024 (`protocol_violation`) is emitted by the protocol fuzzer when a server crashes or mishandles a malformed JSON-RPC message. FUZZD-025–027 (`unexpected_tool_sequence`, `runtime_credential_access`, `unexpected_network_call`) are emitted by the chain-sequence analyzer at runtime and are not measured by this benchmark.
 
 | Signal | Role |
 |---|---|
