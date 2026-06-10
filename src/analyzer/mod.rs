@@ -6,13 +6,13 @@
 //! [`Finding`] type does not; [`SequenceFinding::into_finding`] converts it for
 //! the existing reporter pipeline.
 //!
-//! The live chain *executor* (#15) and mock-peer injection (#16) that drive
-//! adversarial runs build on this; here the analyzer is exercised on recorded
-//! and synthetic sequences.
+//! The live chain *executor* (#15, [`crate::fuzzer::chain`]) drives adversarial
+//! runs through this analyzer and is wired into `audit --attacks chain`;
+//! mock-peer injection (#16) will extend it. The analyzer is also exercised
+//! directly on recorded and synthetic sequences in unit tests.
 //!
-//! Not yet wired into the `audit` command — the `chain` attack module needs the
-//! executor (#15) to produce live adversarial runs. Until then this is a tested
-//! library; `allow(dead_code)` mirrors `protocol::mcp`'s pending-wiring stance.
+//! `allow(dead_code)` covers the helper surface (test constructors, accessors)
+//! the executor does not exercise; the core analyze path is wired.
 #![allow(dead_code)]
 
 pub mod sequence;

@@ -1,0 +1,8 @@
+{
+  "id": "CHAIN-CLEAN-001",
+  "description": "A benign multi-step chain over the clean tool set — no credential paths, no external URLs, no injected calls.",
+  "steps": [
+    { "tool": "get_weather", "args": { "city": "Paris" } },
+    { "tool": "add_numbers", "args": { "a": 2, "b": 3 } }
+  ]
+}
