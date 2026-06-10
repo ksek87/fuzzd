@@ -227,6 +227,9 @@ fuzzd audit --transport stdio --cmd "npx my-mcp-server"
 fuzzd audit --transport http --url http://localhost:8000 --output sarif
 fuzzd audit --transport stdio --cmd "node server.js" --attacks tool_poisoning,protocol
 
+# Run scripted multi-step attack chains (a JSON file or a directory of them)
+fuzzd audit --transport stdio --cmd "node server.js" --attacks chain --chains ./chains/
+
 # Corpus management
 fuzzd corpus list
 fuzzd corpus list --category tool_poisoning --severity critical
@@ -344,7 +347,7 @@ fuzzd/
 | Semantic detection (TF-IDF archetypes) — 90.7% MCPTox, 0 FP | ✅ Shipped |
 | End-to-end integration tests (live stdio server + CLI exit-code/SARIF gates) | ✅ Shipped |
 | **Distribution** — tagged release + binaries + GitHub Action | 🔜 Active |
-| **Agentic chain fuzzing** — stateful, multi-step, cross-tool | 🟡 Committed — not yet built |
+| **Agentic chain fuzzing** — stateful, multi-step, cross-tool | 🟡 In progress — executor shipped, mock-peer injection next |
 | Neural semantic detection | ⏸ Gated spike (go/no-go before any build) |
 | Capability escape (cross-tool boundary) | 🔭 Future |
 | OpenAPI / non-MCP tool surfaces | 🔭 Future |
@@ -360,12 +363,17 @@ runs `fuzzd scan` and uploads SARIF to Code Scanning, with upload-before-fail
 ordering so findings reach GitHub even when they gate the build. (Extraction to a
 standalone `ksek87/fuzzd-action` Marketplace repo is deferred to a later cycle.)
 
-**Agentic chain fuzzing** *(committed — not yet built)*
+**Agentic chain fuzzing** *(in progress)*
 The stateful, multi-step, cross-tool attacks the static scanner cannot see — the
-capability the positioning above promises. Requires a real baseline-diffing
-*sequence* observer and an `analyzer/` module that do not exist yet; the shipped
-`runner/observer.rs` is a response-scanner wrapper. Tracked in
-[#14](https://github.com/ksek87/fuzzd/issues/14)–[#17](https://github.com/ksek87/fuzzd/issues/17).
+capability the positioning above promises. The baseline-diffing *sequence*
+observer and `analyzer/` module are built ([#13/#14](https://github.com/ksek87/fuzzd/issues/14)),
+and the chain executor ([#15](https://github.com/ksek87/fuzzd/issues/15)) is now
+wired into `fuzzd audit --attacks chain --chains <PATH>`: it runs scripted
+tool-call sequences against a live server, records the run, and flags runtime
+anomalies (credential paths and external URLs in call *arguments*, calls injected
+relative to an optional benign baseline). Next: mock poisoned-peer injection
+([#16](https://github.com/ksek87/fuzzd/issues/16)) and TPA chain scripts for all
+three MCPTox paradigms ([#17](https://github.com/ksek87/fuzzd/issues/17)).
 
 **Neural semantic detection** *(gated spike)*
 A compact neural encoder *might* close the Privacy Leakage (73.1%) and Message

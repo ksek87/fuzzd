@@ -167,6 +167,29 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         }
     }
 
+    // Chain fuzzing executes scripted multi-step sequences in their own fresh
+    // stdio sessions (independent of the shared session, like protocol). It needs
+    // both a spawnable --cmd and chain scripts via --chains.
+    if unique_attacks.contains(&cli::AttackModule::Chain) {
+        match (args.chains.as_deref(), args.cmd.as_deref()) {
+            (Some(path), Some(cmd)) => {
+                let chains = fuzzer::chain::load_chains(path)?;
+                if chains.is_empty() {
+                    eprintln!(
+                        "warning: no chain scripts found at {} — skipping chain module",
+                        path.display()
+                    );
+                } else {
+                    findings.extend(fuzzer::chain::fuzz_stdio(cmd, &chains).await?);
+                }
+            }
+            (None, _) => eprintln!("warning: chain fuzzing requires --chains <PATH> — skipping"),
+            (Some(_), None) => {
+                eprintln!("warning: chain fuzzing requires a spawnable --cmd (stdio) — skipping")
+            }
+        }
+    }
+
     // The static (tool-poisoning) and dynamic (argument) modules need the live
     // tool list, so they require a successful handshake. Only pay for it when one
     // of them is requested; otherwise close the unused transport.
@@ -202,7 +225,8 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         match module {
             cli::AttackModule::ToolPoisoning
             | cli::AttackModule::Argument
-            | cli::AttackModule::Protocol => {}
+            | cli::AttackModule::Protocol
+            | cli::AttackModule::Chain => {}
             other => eprintln!("warning: attack module '{other}' not yet implemented — skipping"),
         }
     }

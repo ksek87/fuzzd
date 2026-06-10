@@ -49,6 +49,58 @@ fn audit_detects_tool_poisoning_from_a_live_server() {
 }
 
 #[test]
+fn audit_chain_flags_runtime_credential_access() {
+    // Drives a scripted chain through the live server: a benign call followed by
+    // one carrying an AWS credential path in its runtime arguments. The chain
+    // analyzer must flag it — and Critical severity must gate CI with exit 1.
+    let out = fuzzd()
+        .args(["audit", "--transport", "stdio", "--cmd"])
+        .arg(server_serving("clean_tools.json"))
+        .args(["--attacks", "chain", "--chains"])
+        .arg(fixture("chain_credential_exfil.json"))
+        .args(["--output", "json"])
+        .output()
+        .expect("spawn fuzzd");
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "a runtime credential-path access surfaced mid-chain must gate with exit 1"
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).expect("stdout is valid JSON");
+    let findings = report["findings"].as_array().expect("findings array");
+    assert!(
+        findings
+            .iter()
+            .any(|f| f["signal"] == "runtime_credential_access"),
+        "the credential path in the chain's runtime args must be flagged"
+    );
+}
+
+#[test]
+fn audit_chain_clean_script_reports_no_findings() {
+    let out = fuzzd()
+        .args(["audit", "--transport", "stdio", "--cmd"])
+        .arg(server_serving("clean_tools.json"))
+        .args(["--attacks", "chain", "--chains"])
+        .arg(fixture("chain_clean.json"))
+        .args(["--output", "json"])
+        .output()
+        .expect("spawn fuzzd");
+
+    assert!(
+        out.status.success(),
+        "a benign chain must not gate CI (expected exit 0)"
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).expect("stdout is valid JSON");
+    assert_eq!(
+        report["findings"].as_array().expect("findings array").len(),
+        0,
+        "a benign chain must produce zero findings"
+    );
+}
+
+#[test]
 fn audit_clean_server_reports_no_findings() {
     // Runs both the static (tool_poisoning) and dynamic (argument) modules; the
     // argument module drives real tools/call round-trips against the server.

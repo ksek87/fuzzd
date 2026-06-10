@@ -1,4 +1,5 @@
 pub mod argument;
+pub mod chain;
 pub mod description;
 pub mod payloads;
 pub mod protocol;

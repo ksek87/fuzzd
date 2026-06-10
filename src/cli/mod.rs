@@ -52,6 +52,11 @@ pub struct AuditArgs {
     #[arg(long, value_delimiter = ',', default_values_t = AttackModule::all())]
     pub attacks: Vec<AttackModule>,
 
+    /// Attack-chain scripts for the `chain` module: a JSON file (one chain or an
+    /// array) or a directory of `*.json` chain files.
+    #[arg(long)]
+    pub chains: Option<PathBuf>,
+
     /// Output format.
     #[arg(long, default_value = "markdown")]
     pub output: OutputFormat,
