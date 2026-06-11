@@ -120,32 +120,22 @@ impl Transport for MockPeerTransport {
 }
 
 /// Run peer-injection fuzzing: for each TPA corpus record, inject it as a mock
-/// peer tool alongside the real target server, scan its description, and diff
-/// the synthetic adversarial call sequence against a clean baseline.
+/// peer tool, scan its description, and diff the synthetic adversarial call
+/// sequence against a clean baseline.
 ///
 /// Only corpus records with a paradigm number (TPA records) are tested;
 /// non-TPA records are silently skipped.
-pub async fn fuzz_peer_stdio(cmd: &str, records: &[AttackRecord]) -> Result<Vec<Finding>> {
+pub async fn fuzz_peer_stdio(records: &[AttackRecord]) -> Result<Vec<Finding>> {
     let tpa: Vec<&AttackRecord> = records.iter().filter(|r| r.paradigm.is_some()).collect();
     if tpa.is_empty() {
         return Ok(vec![]);
     }
 
-    // Enumerate real server tools once to detect naming conflicts.
-    let real_tool_names = enumerate_real_tool_names(cmd).await?;
-
     let mut findings = Vec::new();
+    let empty_baseline = SequenceLog::new();
     for record in tpa {
         let peer = MockPeerServer::from_corpus_record(record);
         let provenance = format!("[peer-inject: {}] ", record.id);
-
-        if real_tool_names.contains(&peer.tool_definition().name) {
-            tracing::warn!(
-                tool = %peer.tool_definition().name,
-                record = %record.id,
-                "peer tool name shadows a real server tool — shadowing attack vector confirmed"
-            );
-        }
 
         // 1. Static scan: does the peer description contain known attack patterns?
         for mut f in DescriptionScanner::scan(std::slice::from_ref(peer.tool_definition())) {
@@ -155,45 +145,24 @@ pub async fn fuzz_peer_stdio(cmd: &str, records: &[AttackRecord]) -> Result<Vec<
 
         // 2. Sequence injection: connect to the peer, call its tool, and diff
         //    against an empty baseline to surface it as an injected step.
-        let peer_transport = peer.into_transport();
-        let mut peer_harness = Harness::new(peer_transport);
+        let peer_tool_name = peer.tool_definition().name.clone();
+        let mut peer_harness = Harness::new(peer.into_transport());
         peer_harness.initialize().await?;
-        let available: HashSet<String> = peer_harness
-            .enumerate_tools()
-            .await?
-            .into_iter()
-            .map(|t| t.name)
-            .collect();
 
-        if let Some(peer_tool_name) = available.iter().next().cloned() {
-            let steps = vec![ChainStep {
-                tool: peer_tool_name,
-                args: Value::Null,
-            }];
-            let (adversarial_log, _) = execute(peer_harness, &steps, &available).await?;
+        let steps = vec![ChainStep {
+            tool: peer_tool_name.clone(),
+            args: Value::Null,
+        }];
+        let available = HashSet::from([peer_tool_name]);
+        let (adversarial_log, _) = execute(peer_harness, &steps, &available).await?;
 
-            for sf in analyze(&adversarial_log, Some(&SequenceLog::new())) {
-                let mut f = sf.into_finding();
-                f.detail = format!("{provenance}{}", f.detail);
-                findings.push(f);
-            }
+        for sf in analyze(&adversarial_log, Some(&empty_baseline)) {
+            let mut f = sf.into_finding();
+            f.detail = format!("{provenance}{}", f.detail);
+            findings.push(f);
         }
     }
     Ok(findings)
-}
-
-async fn enumerate_real_tool_names(cmd: &str) -> Result<HashSet<String>> {
-    let transport = crate::protocol::transport::stdio::StdioTransport::spawn(cmd).await?;
-    let mut harness = Harness::new(transport);
-    harness.initialize().await?;
-    let names = harness
-        .enumerate_tools()
-        .await?
-        .into_iter()
-        .map(|t| t.name)
-        .collect();
-    harness.close().await?;
-    Ok(names)
 }
 
 #[cfg(test)]
