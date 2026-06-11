@@ -289,16 +289,12 @@ mod tests {
 
     #[tokio::test]
     async fn fuzz_peer_skips_non_tpa_records() {
-        // A record with paradigm=None must not produce any findings.
         let mut record = tpa_record("ARG-001", "payload");
         record.paradigm = None;
         record.category = Category::ArgumentBoundary;
-        // fuzz_peer_stdio requires a real server — we test via the filter directly.
-        // Verify that the TPA filter produces zero candidates.
-        let records = [record];
-        let tpa: Vec<_> = records.iter().filter(|r| r.paradigm.is_some()).collect();
+        let findings = fuzz_peer_stdio(&[record]).await.unwrap();
         assert!(
-            tpa.is_empty(),
+            findings.is_empty(),
             "non-TPA record must be excluded from peer injection"
         );
     }

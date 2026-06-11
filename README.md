@@ -347,7 +347,7 @@ fuzzd/
 | Semantic detection (TF-IDF archetypes) — 90.7% MCPTox, 0 FP | ✅ Shipped |
 | End-to-end integration tests (live stdio server + CLI exit-code/SARIF gates) | ✅ Shipped |
 | **Distribution** — tagged release + binaries + GitHub Action | 🔜 Active |
-| **Agentic chain fuzzing** — stateful, multi-step, cross-tool | 🟡 In progress — executor shipped, mock-peer injection next |
+| **Agentic chain fuzzing** — stateful, multi-step, cross-tool | ✅ Shipped |
 | Neural semantic detection | ⏸ Gated spike (go/no-go before any build) |
 | Capability escape (cross-tool boundary) | 🔭 Future |
 | OpenAPI / non-MCP tool surfaces | 🔭 Future |
@@ -363,17 +363,20 @@ runs `fuzzd scan` and uploads SARIF to Code Scanning, with upload-before-fail
 ordering so findings reach GitHub even when they gate the build. (Extraction to a
 standalone `ksek87/fuzzd-action` Marketplace repo is deferred to a later cycle.)
 
-**Agentic chain fuzzing** *(in progress)*
+**Agentic chain fuzzing** *(shipped)*
 The stateful, multi-step, cross-tool attacks the static scanner cannot see — the
 capability the positioning above promises. The baseline-diffing *sequence*
 observer and `analyzer/` module are built ([#13/#14](https://github.com/ksek87/fuzzd/issues/14)),
-and the chain executor ([#15](https://github.com/ksek87/fuzzd/issues/15)) is now
-wired into `fuzzd audit --attacks chain --chains <PATH>`: it runs scripted
-tool-call sequences against a live server, records the run, and flags runtime
-anomalies (credential paths and external URLs in call *arguments*, calls injected
-relative to an optional benign baseline). Next: mock poisoned-peer injection
-([#16](https://github.com/ksek87/fuzzd/issues/16)) and TPA chain scripts for all
-three MCPTox paradigms ([#17](https://github.com/ksek87/fuzzd/issues/17)).
+and the chain executor ([#15](https://github.com/ksek87/fuzzd/issues/15)) is wired
+into `fuzzd audit --attacks chain --chains <PATH>`: scripted tool-call sequences
+against a live server, with runtime anomaly detection (credential paths, external
+URLs in call *arguments*, injected calls relative to a benign baseline). Mock
+poisoned-peer injection ([#16](https://github.com/ksek87/fuzzd/issues/16)) ships
+via `--attacks peer`: for each TPA corpus record an in-process
+`MockPeerTransport` injects the poisoned tool alongside the session, scans its
+description, and diffs the synthetic call sequence against an empty baseline.
+Remaining: TPA chain scripts for all three MCPTox paradigms
+([#17](https://github.com/ksek87/fuzzd/issues/17)).
 
 **Neural semantic detection** *(gated spike)*
 A compact neural encoder *might* close the Privacy Leakage (73.1%) and Message

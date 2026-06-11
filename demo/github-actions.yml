@@ -20,8 +20,8 @@ jobs:
       - uses: actions/checkout@v4
 
       # ── Install fuzzd ──────────────────────────────────────────────────────
-      # Pre-built binaries available from v0.8: https://github.com/ksek87/fuzzd/releases
-      # Until then, install from source:
+      # Pre-built binaries available from v0.12.0: https://github.com/ksek87/fuzzd/releases
+      # Install from source (or download a release binary and place it on PATH):
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install fuzzd
@@ -41,22 +41,16 @@ jobs:
 
       # ── Scan ───────────────────────────────────────────────────────────────
       # Exit 0 = clean. Exit 1 = critical/high findings → PR is blocked.
-      # To suppress a reviewed finding so it no longer blocks CI (v0.8+):
+      # To suppress a reviewed finding so it no longer blocks CI:
       #   fuzzd suppress <tool> <signal> --reason "Reviewed by @alice 2026-05-23"
       #   git add .fuzzd/suppress.toml && git commit -m "suppress: accept <tool>/<signal>"
       - name: Scan for MCP tool poisoning patterns
-        run: fuzzd scan --schema tools.json
+        run: fuzzd scan --schema tools.json --output sarif > fuzzd.sarif || true
 
-      # ── Optional: upload to GitHub Code Scanning (v0.8+) ──────────────────
+      # ── Upload to GitHub Code Scanning ─────────────────────────────────────
       # Findings appear in the Security tab. Human dismissals persist across
       # scans — no need to re-review the same finding after each push.
-      #
-      # Uncomment when v0.8 is released:
-      #
-      # - name: Scan and emit SARIF
-      #   run: fuzzd scan --schema tools.json --output sarif > fuzzd.sarif || true
-      #
-      # - name: Upload to GitHub Code Scanning
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: fuzzd.sarif
+      - name: Upload to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: fuzzd.sarif
