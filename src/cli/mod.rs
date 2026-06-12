@@ -48,7 +48,7 @@ pub struct AuditArgs {
     pub url: Option<String>,
 
     /// Attack modules to run (comma-separated).
-    /// Available: tool_poisoning, argument, protocol, chain, escape
+    /// Available: tool_poisoning, argument, protocol, chain, peer, escape
     #[arg(long, value_delimiter = ',', default_values_t = AttackModule::all())]
     pub attacks: Vec<AttackModule>,
 
@@ -171,6 +171,10 @@ pub enum AttackModule {
     Argument,
     Protocol,
     Chain,
+    /// Mock poisoned-peer injection: inject a corpus TPA tool alongside the real
+    /// server and detect it via static scan + sequence diff. Must be explicitly
+    /// requested; not included in the default module set.
+    Peer,
     Escape,
 }
 
@@ -193,6 +197,7 @@ impl std::fmt::Display for AttackModule {
             Self::Argument => write!(f, "argument"),
             Self::Protocol => write!(f, "protocol"),
             Self::Chain => write!(f, "chain"),
+            Self::Peer => write!(f, "peer"),
             Self::Escape => write!(f, "escape"),
         }
     }

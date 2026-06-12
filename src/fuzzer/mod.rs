@@ -2,6 +2,7 @@ pub mod argument;
 pub mod chain;
 pub mod description;
 pub mod payloads;
+pub mod peer;
 pub mod protocol;
 pub mod response;
 pub(crate) mod tfidf;

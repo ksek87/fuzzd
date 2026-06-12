@@ -101,6 +101,31 @@ fn audit_chain_clean_script_reports_no_findings() {
 }
 
 #[test]
+fn audit_peer_injection_surfaces_corpus_tpa_tools() {
+    // Runs the peer-injection module against the clean server. The embedded
+    // corpus contains TPA records with poisoned payloads; the static scanner
+    // and sequence injector must flag at least one, gating CI with exit 1.
+    let out = fuzzd()
+        .args(["audit", "--transport", "stdio", "--cmd"])
+        .arg(server_serving("clean_tools.json"))
+        .args(["--attacks", "peer", "--output", "json"])
+        .output()
+        .expect("spawn fuzzd");
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "embedded TPA corpus records injected as peer tools must gate CI with exit 1"
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).expect("stdout is valid JSON");
+    let findings = report["findings"].as_array().expect("findings array");
+    assert!(
+        !findings.is_empty(),
+        "at least one peer-injection finding must be reported from the embedded corpus"
+    );
+}
+
+#[test]
 fn audit_clean_server_reports_no_findings() {
     // Runs both the static (tool_poisoning) and dynamic (argument) modules; the
     // argument module drives real tools/call round-trips against the server.
