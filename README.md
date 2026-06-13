@@ -5,6 +5,7 @@
 [![CI](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml/badge.svg)](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
+[![Roadmap](https://img.shields.io/badge/roadmap-issue%20%2326-blue.svg)](https://github.com/ksek87/fuzzd/issues/26)
 
 > *"Fuzz your agent's tools before someone else does."*
 
