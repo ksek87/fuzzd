@@ -5,6 +5,7 @@
 [![CI](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml/badge.svg)](https://github.com/ksek87/fuzzd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org/)
+[![Roadmap](https://img.shields.io/badge/roadmap-issue%20%2326-blue.svg)](https://github.com/ksek87/fuzzd/issues/26)
 
 > *"Fuzz your agent's tools before someone else does."*
 
@@ -437,14 +438,43 @@ the spike must justify that trade or the theme is dropped.
 
 [^18]: Sun et al., **VIPER-MCP: Detecting and Exploiting Taint-Style Vulnerabilities in Model Context Protocol Servers** (Zhejiang University, 2026). End-to-end automated vulnerability auditing framework combining CodeQL static taint analysis with LLM-driven prompt fuzzing and runtime oracle confirmation. Scanned 39,884 real-world MCP server repos; discovered 106 0-day vulnerabilities (67 CVEs assigned) across command injection, SSRF, and path traversal classes. 4.6% FPR, 7.7% FNR. Complements fuzzd's tool-poisoning detection (server-side implementation vulnerabilities vs. client-side description poisoning). Independently validates that `inputSchema` parameter fields are attacker-controlled taint sources (aligns with issue #34). https://arxiv.org/abs/2605.21392
 
+[^19]: Wang et al., **MCPGuard: Automatically Detecting Vulnerabilities in MCP Servers** (Oct 2025). Three-agent (hacker / auditor / supervisor) dynamic probing loop for live MCP servers; identifies traditional web vulnerabilities (SQLi, path traversal, XSS) in MCP server implementations in addition to tool-poisoning. AIG tool for automated vulnerability detection. The closest academic analogue to fuzzd's audit mode. https://arxiv.org/abs/2510.23673
+
+[^20]: Anon, **Model Context Protocol Threat Modeling and Analyzing Vulnerabilities to Prompt Injection with Tool Poisoning** (Mar 2026). Full threat model against the 2024-11-05 spec. Identifies the `annotations` field in newer MCP spec versions as an attack surface: malicious servers can set `readOnlyHint: true` on destructive tools to suppress user confirmation dialogs. https://arxiv.org/pdf/2603.22489
+
+[^21]: Anon, **MCP-DPT: A Defense-Placement Taxonomy and Coverage Analysis for Model Context Protocol Security** (Apr 2026). Maps defenses to attack classes across the MCP stack; surfaces the indirect injection relay problem — no current scanner checks whether a server's output is sanitized before being passed as input to a subsequent tool call. https://arxiv.org/pdf/2604.07551
+
+[^22]: Anon, **ETDI: Mitigating Tool Squatting and Rug Pull Attacks in MCP by using OAuth-Enhanced Tool Definitions** (Jun 2026). Protocol extension proposing cryptographic OAuth signatures on tool definitions; forces re-approval whenever a tool definition changes. Direct technical response to CVE-2025-54136 and the rug-pull class. https://arxiv.org/html/2506.01333v1
+
+[^23]: Anon, **Security Threat Modeling for Emerging AI-Agent Protocols: A Comparative Analysis of MCP, A2A, Agora, and ANP** (Feb 2026). Cross-protocol analysis; MCP ↔ A2A downgrade and relay-abuse attacks documented; inter-agent communication trust boundaries undefined across protocol boundaries. https://arxiv.org/html/2602.11327v2
+
+[^24]: Anon, **AgentLAB: Benchmarking LLM Agents against Long-Horizon Attacks** (Feb 2026). Introduces the MemoryGraft attack class: planting malicious entries in an agent's long-term memory through benign-looking content that fires weeks later. Also documents MINJA (memory injection via normal queries, NeurIPS 2025). https://arxiv.org/pdf/2602.16901
+
+[^25]: NSA Cybersecurity Directorate, **Model Context Protocol (MCP): Security Design Considerations for AI-Driven Automation** (May 2026). Government advisory comparing MCP to early web protocols — flexible and underspecified, with security left to implementers. Key findings: no mandatory authentication, no RBAC in the protocol, no defined audit logging. Recommends signing and verifying tool definitions, sandboxing tool execution, logging all invocations, and scanning networks for open MCP servers. https://www.nsa.gov/Portals/75/documents/Cybersecurity/CSI_MCP_SECURITY.pdf
+
+[^26]: OWASP Foundation, **OWASP MCP Top 10** (2025–2026). Dedicated OWASP project for MCP-specific security risks, covering model misbinding, context spoofing, prompt-state manipulation, insecure memory references, and covert attacks. Distinct from the LLM Top 10 and the Agentic Top 10. Mapping fuzzd SARIF rules to OWASP MCP Top 10 IDs is the standard enterprise compliance gate. https://owasp.org/www-project-mcp-top-10/
+
+[^27]: OWASP Gen AI Security Project, **OWASP Top 10 for Agentic Applications** (Dec 2025). The new threat model for AI agents and MCP deployments: ASI01 Agent Goal Hijack, ASI02 Tool Misuse & Exploitation, ASI03 Agent Identity & Privilege Abuse, ASI04 Agentic Supply Chain Vulnerabilities, ASI05 Unexpected Code Execution, ASI06 Memory & Context Poisoning, ASI07 Insecure Inter-Agent Communication. fuzzd covers ASI01/ASI02 well; ASI03–ASI07 are open gaps. https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/
+
+[^28]: SecurityWeek / Tenable, **Shai-Hulud / TeamPCP MCP Supply Chain Campaign** (Sep 2025 – May 2026). 37 coordinated supply chain campaigns across npm and PyPI; 497 indexed packages. Self-propagating worm steals developer and cloud credentials, then publishes poisoned versions of additional packages. First campaign to compromise packages with valid SLSA Build Level 3 provenance attestations. AI agent tooling targeted specifically: CLAUDE.md hidden instructions, .cursorrules poisoning, MCP SessionStart hooks used as delivery mechanisms. https://www.securityweek.com/over-100-npm-pypi-packages-hit-in-new-shai-hulud-supply-chain-attacks/
+
 ---
 
 ## Additional Reading
 
 - **VIPER-MCP** (2026) [^18] — Server-side taint vulnerability detection (command injection, SSRF, path traversal) via CodeQL + LLM fuzzing; 106 0-days, 67 CVEs across 39,884 repos. Complementary to fuzzd (implementation bugs vs. tool poisoning). https://arxiv.org/abs/2605.21392
+- **MCPGuard** (2025) [^19] — Three-agent hacker/auditor/supervisor dynamic probing; covers traditional web vulns in MCP server code. https://arxiv.org/abs/2510.23673
+- **MCP-DPT Defense-Placement Taxonomy** (2026) [^21] — Maps defenses to attack classes; surfaces indirect injection relay gap. https://arxiv.org/pdf/2604.07551
+- **ETDI: OAuth-Enhanced Tool Definitions** (2026) [^22] — Cryptographic signing of tool definitions; direct response to rug-pull attacks. https://arxiv.org/html/2506.01333v1
+- **MCP / A2A / ANP Threat Modeling** (2026) [^23] — Cross-protocol attack taxonomy; downgrade and relay-abuse across agent protocols. https://arxiv.org/html/2602.11327v2
+- **NSA MCP Security Advisory** (May 2026) [^25] — Government guidance; compliance teams gate on this document. https://www.nsa.gov/Portals/75/documents/Cybersecurity/CSI_MCP_SECURITY.pdf
+- **OWASP MCP Top 10** [^26] — Dedicated MCP risk taxonomy. https://owasp.org/www-project-mcp-top-10/
+- **OWASP Top 10 for Agentic Applications** (Dec 2025) [^27] — ASI01–ASI07; the emerging compliance target for agentic AI deployments. https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
 - **Auditing MCP Servers for Over-Privileged Tool Capabilities** (2026) — Static + eBPF dynamic analysis; pre-deployment auditing architecture. https://arxiv.org/html/2603.21641v1
 - **MCP-SafetyBench** (ICLR 2026) [^16] — 20 attack types across 5 domains; multi-turn; most comprehensive current benchmark. https://arxiv.org/abs/2512.15163
 - **Systematic Analysis of MCP Security** (MCPLIB, 2025) [^17] — 31 distinct attack types across 4 categories. https://arxiv.org/abs/2508.12538
+- **mcp-scan / Snyk Agent Scan** — Tool pinning, config-file-first scanning, Snyk enterprise integration. https://github.com/invariantlabs-ai/mcp-scan
+- **Proximity** — NOVA rules engine; scans prompts + resources in addition to tools; full MCP Spec 2025-11-25 compliance. https://github.com/fr0gger/proximity
 - **mcp-server-fuzzer** — The existing Python-based stateless MCP fuzzer (argument-only). https://github.com/Agent-Hellboy/mcp-server-fuzzer
 
 ---

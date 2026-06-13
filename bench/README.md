@@ -43,13 +43,15 @@ false positive rate.
 
 Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
 
-| | v0.9 | v0.10 | **v0.11** |
-|---|---|---|---|
-| **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | **440 / 485 (90.7%)** |
-| Unrelated Prerequisite | 60 / 77 (77.9%) | 63 / 77 (81.8%) | **65 / 77 (84.4%)** |
-| Fake Enabling Prerequisite | 146 / 183 (79.7%) | 152 / 183 (83.0%) | **155 / 183 (84.6%)** |
-| Argument Hijacking | 205 / 225 (91.1%) | 217 / 225 (96.4%) | **220 / 225 (97.7%)** |
-| **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
+| | v0.9 | v0.10 | v0.11 | **v0.12** |
+|---|---|---|---|---|
+| **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | 440 / 485 (90.7%) | **440 / 485 (90.7%)** |
+| Unrelated Prerequisite | 60 / 77 (77.9%) | 63 / 77 (81.8%) | 65 / 77 (84.4%) | **65 / 77 (84.4%)** |
+| Fake Enabling Prerequisite | 146 / 183 (79.7%) | 152 / 183 (83.0%) | 155 / 183 (84.6%) | **155 / 183 (84.6%)** |
+| Argument Hijacking | 205 / 225 (91.1%) | 217 / 225 (96.4%) | 220 / 225 (97.7%) | **220 / 225 (97.7%)** |
+| **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
+
+**v0.12 (no description-scan change):** Description scanner detection rate is unchanged from v0.11. The v0.12.0 release introduced four new attack modules measured separately — protocol edge-case fuzzer (FUZZD-024), stateful sequence analyzer (FUZZD-025–027), scripted chain executor, and mock peer-tool injection — plus a response-phase scanner with 37 patterns targeting FUZZD-022/023. None of these affect the MCPTox description-scan benchmark, which measures static tool-description detection only.
 
 **v0.11 improvement (+1.7pp overall):** Six new AC needles targeting soft-modal
 fake-prerequisite enforcement — consequence-threat framing ("failure to do so will",
@@ -62,9 +64,9 @@ gains: Unrelated Prerequisite +2.6pp, Fake Enabling Prerequisite +1.6pp, Argumen
 targeting Message Hijacking and Privacy Leakage coverage gaps — domain-specific
 relay/redirect vocabulary that AC needles cannot enumerate.
 
-**v0.9 baseline:** 125 AC patterns across 21 signals. FUZZD-022 and FUZZD-023 (response-phase signals) added in the [Unreleased] cycle.
+**v0.9 baseline:** 125 AC patterns across 21 signals.
 
-#### By risk category (v0.11)
+#### By risk category (v0.12 / v0.11 — unchanged)
 
 | Risk category | Detected | Rate |
 |---|---|---|
@@ -124,7 +126,7 @@ on all 485 entries so no regeneration step is needed.
 
 The scanner runs four passes over each tool description and `inputSchema` fields:
 
-**Pass 1 — Aho-Corasick (161 description patterns, 20 response patterns):** Single
+**Pass 1 — Aho-Corasick (161 description patterns, 37 response patterns):** Single
 O(N) sweep matching all needles simultaneously via a shared `OnceLock<AhoCorasick>`
 automaton built once per scanner. Fires Critical/High findings.
 
