@@ -1169,6 +1169,205 @@ static PATTERNS: &[Pattern] = &[
         detail: "Context enrichment intermediary framing — presents attacker's tool as a required preprocessing step for all queries",
         corpus_refs: &[],
     },
+    // ── API key and token prefixes (#80) ─────────────────────────────────────
+    // High-confidence prefixes that appear exclusively in credential contexts.
+    // Basis: token format specifications from respective providers; confirmed in
+    // real-world MCPTox Privacy Leakage payloads requesting cloud key exfiltration.
+    Pattern {
+        needle: "akia",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "AWS IAM access key prefix (AKIA…) — presence in a tool description indicates credential theft targeting",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "ghp_",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "GitHub Personal Access Token prefix — gh{p,u,s}_ tokens grant repository and organisation access",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "ghu_",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "GitHub user-to-server token prefix",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "ghs_",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "GitHub server-to-server token prefix",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "xoxb-",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Slack bot token prefix (xoxb-) — grants Slack workspace API access",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "xoxp-",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Slack user token prefix (xoxp-) — grants full Slack user account access",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "sk-ant-",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Anthropic API key prefix (sk-ant-) — grants access to Claude models and the Anthropic API",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "aizasy",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Google Cloud / Firebase API key prefix (AIzaSy…) — grants access to Google services",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "sk_live_",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Stripe live secret key prefix — grants full payment processing and data access",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "sk_test_",
+        signal: Signal::CredentialReference,
+        severity: Severity::High,
+        detail: "Stripe test secret key prefix",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "~/.kube/config",
+        signal: Signal::CredentialReference,
+        severity: Severity::Critical,
+        detail: "Kubernetes cluster config — contains cluster credentials, tokens, and CA certificates",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "~/.docker/config.json",
+        signal: Signal::CredentialReference,
+        severity: Severity::High,
+        detail: "Docker registry credentials file",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "bearer ",
+        signal: Signal::CredentialReference,
+        severity: Severity::High,
+        detail: "HTTP Bearer token reference — indicates credential exfiltration via authorization header",
+        corpus_refs: &[],
+    },
+    // ── Multilingual injection patterns (#82) ────────────────────────────────
+    // Non-English imperative patterns used to evade English-only scanners.
+    // Basis: MCPTox dataset analysis; Perez & Ribeiro (2022) multilingual evasion;
+    // Wang et al. (2025) cross-language attack samples.
+    // Note: ascii_case_insensitive applies only to ASCII bytes; CJK/Cyrillic/Arabic
+    // patterns match their exact byte sequences (which is correct for these scripts).
+    Pattern {
+        needle: "必须",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Chinese imperative '必须' (bìxū = must/required) — non-English authority language in tool description",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "您必须",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::Critical,
+        detail: "Chinese direct imperative '您必须' (nín bìxū = you must) — high-confidence prompt injection marker",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "立即执行",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::Critical,
+        detail: "Chinese '立即执行' (lìjí zhíxíng = execute immediately) — urgency injection pattern",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "不得告知",
+        signal: Signal::StealthLanguage,
+        severity: Severity::Critical,
+        detail: "Chinese '不得告知' (bùdé gàozhī = must not inform/tell) — stealth concealment pattern",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "系统规则",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Chinese '系统规则' (xìtǒng guīzé = system rule) — fake system authority claim",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "必須",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Japanese/Traditional Chinese '必須' (hisshū / bìxū = mandatory/required)",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "絶対に",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Japanese '絶対に' (zettai ni = absolutely/without exception) — strong imperative",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "반드시",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Korean '반드시' (bandeusi = must/without fail) — imperative injection pattern",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "알리지 마",
+        signal: Signal::StealthLanguage,
+        severity: Severity::Critical,
+        detail: "Korean '알리지 마' (alliji ma = do not tell/inform) — stealth concealment pattern",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "должны",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Russian 'должны' (dolzhny = must/have to) — imperative injection in Cyrillic",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "обязательно",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Russian 'обязательно' (obyazatelno = mandatory) — authority language in Cyrillic",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "не сообщайте",
+        signal: Signal::StealthLanguage,
+        severity: Severity::Critical,
+        detail: "Russian 'не сообщайте' (ne soobshchayte = do not report/tell) — concealment pattern",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "يجب",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Arabic 'يجب' (yajib = must/required) — imperative injection in Arabic script",
+        corpus_refs: &[],
+    },
+    Pattern {
+        needle: "إلزامي",
+        signal: Signal::ImperativeOverride,
+        severity: Severity::High,
+        detail: "Arabic 'إلزامي' (ilzami = mandatory) — authority language in Arabic script",
+        corpus_refs: &[],
+    },
 ];
 
 static SCANNER: Scanner = Scanner::new(PATTERNS);

@@ -228,6 +228,23 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
                         .map(|r| (r.name.as_str(), r.description.as_deref())),
                 ));
             }
+            // Tool pinning: re-fetch tools/list and flag any definition that changed.
+            // A changing definition between calls is the rug-pull / conditional-activation
+            // pattern (FUZZD-011) — the server shows a benign tool until certain conditions
+            // are met, then swaps to a malicious one.
+            if let Ok(changed) = harness.recheck_tool_integrity().await {
+                for name in changed {
+                    findings.push(fuzzer::Finding {
+                        tool_name: name,
+                        signal: fuzzer::Signal::ConditionalActivation,
+                        severity: Severity::Critical,
+                        matched_text: "tool definition changed between tools/list calls".to_string(),
+                        detail: "Tool definition mutated between two tools/list calls in the same session — rug-pull / conditional-activation attack (FUZZD-011)".to_string(),
+                        corpus_refs: &[],
+                        suppressed: false,
+                    });
+                }
+            }
         }
 
         // Dynamic analysis — argument boundary fuzzer with response scanning.

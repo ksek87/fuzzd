@@ -1,6 +1,3 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 pub struct PayloadCategory {
     pub name: &'static str,
     pub payloads: &'static [&'static str],
@@ -85,6 +82,46 @@ pub static XML_INJECTION: PayloadCategory = PayloadCategory {
     ],
 };
 
+/// SSRF payloads: internal IPs, cloud metadata endpoints, and protocol-scheme abuse.
+/// Targets string fields that may be passed to URL-fetching or network-connecting code.
+/// Basis: PortSwigger SSRF cheatsheet; HackTricks SSRF; cloud metadata endpoint list.
+pub static SSRF: PayloadCategory = PayloadCategory {
+    name: "ssrf",
+    payloads: &[
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "http://169.254.169.254/metadata/v1/",
+        "http://127.0.0.1/",
+        "http://localhost/",
+        "http://0.0.0.0/",
+        "http://[::1]/",
+        "http://192.168.1.1/",
+        "http://10.0.0.1/",
+        "http://172.16.0.1/",
+        "file:///etc/passwd",
+        "file://localhost/etc/shadow",
+        "gopher://127.0.0.1:6379/_PING",
+        "dict://127.0.0.1:6379/info",
+    ],
+};
+
+/// ReDoS payloads: strings that trigger catastrophic backtracking in vulnerable regex engines.
+/// Targets string fields processed by server-side regex validation.
+/// Basis: OWASP ReDoS; Snyk ReDoS vulnerability catalog; Davis et al. (2018).
+pub static REDOS: PayloadCategory = PayloadCategory {
+    name: "redos",
+    payloads: &[
+        // Long repetition that exhausts backtracking regex engines
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!",
+        // Email-like pattern targeting common `(a+)+@` regex vulnerabilities
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@b",
+        // Mismatched nested quantifier input
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@aaaaaaaaa",
+        // Ambiguous alternation: triggers (a|a)* backtracking
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaax",
+    ],
+};
+
 /// All string payload categories. Used by the argument fuzzer for string fields.
 pub static ALL_CATEGORIES: &[&PayloadCategory] = &[
     &PATH_TRAVERSAL,
@@ -95,6 +132,8 @@ pub static ALL_CATEGORIES: &[&PayloadCategory] = &[
     &FORMAT_STRING,
     &TEMPLATE_INJECTION,
     &XML_INJECTION,
+    &SSRF,
+    &REDOS,
 ];
 
 /// Integer boundary values that commonly trigger off-by-one errors, overflow, or type confusion.
