@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::Path;
 
 use anyhow::Result;
 use clap::Parser;
@@ -6,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 
 mod analyzer;
 mod cli;
+mod config;
 mod corpus;
 mod fuzzer;
 mod protocol;
@@ -37,25 +39,38 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Audit(args) => match args.transport {
-            TransportKind::Stdio => {
-                let cmd = args.cmd.as_deref().expect("stdio transport requires --cmd");
-                let transport = protocol::transport::stdio::StdioTransport::spawn(cmd).await?;
-                run_audit(Harness::new(transport), &args).await?;
+        Command::Audit(args) => {
+            if let Some(ref config_arg) = args.from_config.clone() {
+                run_config_audit(&args, config_arg).await?;
+            } else {
+                match args.transport {
+                    TransportKind::Stdio => {
+                        let cmd = args
+                            .cmd
+                            .as_deref()
+                            .ok_or_else(|| anyhow::anyhow!("stdio transport requires --cmd"))?;
+                        let transport =
+                            protocol::transport::stdio::StdioTransport::spawn(cmd).await?;
+                        run_audit(Harness::new(transport), &args, Some(cmd)).await?;
+                    }
+                    TransportKind::Http => {
+                        let url = args
+                            .url
+                            .as_deref()
+                            .ok_or_else(|| anyhow::anyhow!("http transport requires --url"))?;
+                        let transport =
+                            protocol::transport::http::HttpTransport::connect(url).await?;
+                        run_audit(Harness::new(transport), &args, None).await?;
+                    }
+                }
             }
-            TransportKind::Http => {
-                let url = args.url.as_deref().expect("http transport requires --url");
-                let transport = protocol::transport::http::HttpTransport::connect(url).await?;
-                run_audit(Harness::new(transport), &args).await?;
-            }
-        },
+        }
         Command::Scan(args) => {
             let src = std::fs::read_to_string(&args.schema)?;
             let tools = serde_json::from_str::<ListToolsResult>(&src)
                 .map(|r| r.tools)
                 .or_else(|_| serde_json::from_str(&src))?;
-            let suppress =
-                SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
+            let suppress = SuppressConfig::load_or_empty(Path::new(DEFAULT_SUPPRESS_PATH))?;
             let mut findings = DescriptionScanner::scan(&tools);
             apply_suppressions(&mut findings, &suppress);
             reporter::write_findings(&findings, tools.len(), &args.output, args.out.as_deref())?;
@@ -148,12 +163,16 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs) -> Result<()> {
-    // Deduplicate so the same module flag passed twice doesn't double-scan.
+/// Collect all findings for a single server session without applying suppressions
+/// or writing a report. `spawn_cmd` is the command string to re-spawn the server
+/// for protocol/chain fuzzing (None = skip those modules).
+async fn collect_audit_findings<T: Transport>(
+    mut harness: Harness<T>,
+    args: &cli::AuditArgs,
+    spawn_cmd: Option<&str>,
+) -> Result<(Vec<Finding>, usize)> {
     let unique_attacks: HashSet<&cli::AttackModule> = args.attacks.iter().collect();
     let mut findings = Vec::new();
-    // Tools enumerated for the report header; stays 0 for protocol-only runs that
-    // never enumerate (e.g. fuzzing a server that won't complete initialize).
     let mut tools_scanned = 0usize;
 
     // Protocol fuzzing re-spawns the server fresh per case (lifecycle probes need
@@ -161,7 +180,7 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     // against a server that never completes the initialize handshake, since probing
     // exactly that is its job. stdio only.
     if unique_attacks.contains(&cli::AttackModule::Protocol) {
-        match args.cmd.as_deref() {
+        match spawn_cmd {
             Some(cmd) => findings.extend(fuzzer::protocol::fuzz_stdio(cmd).await?),
             None => {
                 eprintln!("warning: protocol fuzzing requires a spawnable --cmd (stdio) — skipping")
@@ -173,7 +192,7 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
     // stdio sessions (independent of the shared session, like protocol). It needs
     // both a spawnable --cmd and chain scripts via --chains.
     if unique_attacks.contains(&cli::AttackModule::Chain) {
-        match (args.chains.as_deref(), args.cmd.as_deref()) {
+        match (args.chains.as_deref(), spawn_cmd) {
             (Some(path), Some(cmd)) => {
                 let chains = fuzzer::chain::load_chains(path)?;
                 if chains.is_empty() {
@@ -185,7 +204,9 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
                     findings.extend(fuzzer::chain::fuzz_stdio(cmd, &chains).await?);
                 }
             }
-            (None, _) => eprintln!("warning: chain fuzzing requires --chains <PATH> — skipping"),
+            (None, _) => {
+                eprintln!("warning: chain fuzzing requires --chains <PATH> — skipping")
+            }
             (Some(_), None) => {
                 eprintln!("warning: chain fuzzing requires a spawnable --cmd (stdio) — skipping")
             }
@@ -194,7 +215,6 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
 
     // Peer-injection fuzzing: inject each TPA corpus record as a mock peer tool
     // and detect it via static scan + sequence diff.
-    // Uses the embedded corpus (TPA-paradigm records only).
     if unique_attacks.contains(&cli::AttackModule::Peer) {
         let corpus = corpus::Corpus::embedded();
         findings.extend(fuzzer::peer::fuzz_peer_stdio(&corpus.records).await?);
@@ -238,8 +258,11 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
                         tool_name: name,
                         signal: fuzzer::Signal::ConditionalActivation,
                         severity: Severity::Critical,
-                        matched_text: "tool definition changed between tools/list calls".to_string(),
-                        detail: "Tool definition mutated between two tools/list calls in the same session — rug-pull / conditional-activation attack (FUZZD-011)".to_string(),
+                        matched_text: "tool definition changed between tools/list calls"
+                            .to_string(),
+                        detail: "Tool definition mutated between two tools/list calls in the \
+                            same session — rug-pull / conditional-activation attack (FUZZD-011)"
+                            .to_string(),
                         corpus_refs: &[],
                         suppressed: false,
                     });
@@ -268,11 +291,104 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         findings.extend(fuzzer::escape::fuzz_escape().await?);
     }
 
-    let suppress = SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;
-    apply_suppressions(&mut findings, &suppress);
+    Ok((findings, tools_scanned))
+}
 
+async fn run_audit<T: Transport>(
+    harness: Harness<T>,
+    args: &cli::AuditArgs,
+    spawn_cmd: Option<&str>,
+) -> Result<()> {
+    let (mut findings, tools_scanned) = collect_audit_findings(harness, args, spawn_cmd).await?;
+    let suppress = SuppressConfig::load_or_empty(Path::new(DEFAULT_SUPPRESS_PATH))?;
+    apply_suppressions(&mut findings, &suppress);
     reporter::write_findings(&findings, tools_scanned, &args.output, args.out.as_deref())?;
     exit_if_blocking(&findings);
+    Ok(())
+}
+
+/// Audit every MCP server listed in a Claude Desktop / Cline config file.
+/// Each server is audited independently and findings are tagged `server/tool_name`.
+async fn run_config_audit(args: &cli::AuditArgs, config_arg: &str) -> Result<()> {
+    let desktop_config = if config_arg == "auto" {
+        match config::auto_detect() {
+            Some((path, cfg)) => {
+                eprintln!("fuzzd: using config at {}", path.display());
+                cfg
+            }
+            None => anyhow::bail!(
+                "no Claude Desktop config found at standard paths — use --from-config <PATH>"
+            ),
+        }
+    } else {
+        config::load_config(Path::new(config_arg))?
+    };
+
+    if desktop_config.mcp_servers.is_empty() {
+        eprintln!("fuzzd: no MCP servers found in config");
+        return Ok(());
+    }
+
+    let suppress = SuppressConfig::load_or_empty(Path::new(DEFAULT_SUPPRESS_PATH))?;
+    let mut all_findings = Vec::new();
+    let mut total_tools = 0usize;
+    let mut server_summaries: Vec<(String, usize)> = Vec::new();
+
+    let mut servers: Vec<_> = desktop_config.mcp_servers.into_iter().collect();
+    servers.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (server_name, server) in servers {
+        eprintln!("fuzzd: auditing '{server_name}'");
+        let spawn_cmd = server.spawn_cmd();
+        let transport = match protocol::transport::stdio::StdioTransport::spawn_with_args(
+            &server.command,
+            &server.args,
+            &server.env,
+        )
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("fuzzd: skipping '{server_name}': {e}");
+                server_summaries.push((server_name, 0));
+                continue;
+            }
+        };
+
+        match collect_audit_findings(Harness::new(transport), args, Some(&spawn_cmd)).await {
+            Ok((mut findings, tools_scanned)) => {
+                total_tools += tools_scanned;
+                for f in &mut findings {
+                    f.tool_name = format!("{server_name}/{}", f.tool_name);
+                }
+                let n = findings.len();
+                server_summaries.push((server_name, n));
+                all_findings.extend(findings);
+            }
+            Err(e) => {
+                eprintln!("fuzzd: audit of '{server_name}' failed: {e}");
+                server_summaries.push((server_name, 0));
+            }
+        }
+    }
+
+    apply_suppressions(&mut all_findings, &suppress);
+
+    if server_summaries.len() > 1 {
+        eprintln!("\nper-server findings:");
+        for (name, n) in &server_summaries {
+            eprintln!("  {name}: {n}");
+        }
+        eprintln!();
+    }
+
+    reporter::write_findings(
+        &all_findings,
+        total_tools,
+        &args.output,
+        args.out.as_deref(),
+    )?;
+    exit_if_blocking(&all_findings);
     Ok(())
 }
 
