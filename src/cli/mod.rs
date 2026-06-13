@@ -40,12 +40,22 @@ pub struct AuditArgs {
     pub transport: TransportKind,
 
     /// Command to spawn (stdio transport only).
-    #[arg(long, required_if_eq("transport", "stdio"))]
+    #[arg(long, conflicts_with = "from_config")]
     pub cmd: Option<String>,
 
     /// Server URL (http transport only).
-    #[arg(long, required_if_eq("transport", "http"))]
+    #[arg(
+        long,
+        required_if_eq("transport", "http"),
+        conflicts_with = "from_config"
+    )]
     pub url: Option<String>,
+
+    /// Path to a Claude Desktop or Cline config file to audit all configured
+    /// servers in one pass. Use `auto` to search standard platform paths.
+    /// Mutually exclusive with `--cmd` and `--url`.
+    #[arg(long, conflicts_with_all = ["cmd", "url", "transport"])]
+    pub from_config: Option<String>,
 
     /// Attack modules to run (comma-separated).
     /// Available: tool_poisoning, argument, protocol, chain, peer, escape
@@ -348,6 +358,38 @@ mod tests {
     #[test]
     fn attack_module_all_has_five_entries() {
         assert_eq!(AttackModule::all().len(), 5);
+    }
+
+    #[test]
+    fn audit_from_config_path_parses() {
+        let cli = Cli::try_parse_from([
+            "fuzzd",
+            "audit",
+            "--from-config",
+            "/home/user/.config/claude/claude_desktop_config.json",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Audit(args) => {
+                assert_eq!(
+                    args.from_config.as_deref(),
+                    Some("/home/user/.config/claude/claude_desktop_config.json")
+                );
+                assert!(args.cmd.is_none());
+            }
+            _ => panic!("expected audit"),
+        }
+    }
+
+    #[test]
+    fn audit_from_config_auto_parses() {
+        let cli = Cli::try_parse_from(["fuzzd", "audit", "--from-config", "auto"]).unwrap();
+        match cli.command {
+            Command::Audit(args) => {
+                assert_eq!(args.from_config.as_deref(), Some("auto"));
+            }
+            _ => panic!("expected audit"),
+        }
     }
 
     #[test]

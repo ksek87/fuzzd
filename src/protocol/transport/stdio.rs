@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -18,16 +19,46 @@ pub struct StdioTransport {
 
 impl StdioTransport {
     pub async fn spawn(cmd: &str) -> Result<Self> {
-        let mut args = cmd.split_whitespace();
-        let program = args.next().ok_or_else(|| anyhow!("empty command"))?;
+        let mut parts = cmd.split_whitespace();
+        let program = parts.next().ok_or_else(|| anyhow!("empty command"))?;
+        Self::spawn_inner(
+            program,
+            parts.collect::<Vec<_>>().as_slice(),
+            &HashMap::new(),
+        )
+        .await
+        .with_context(|| format!("failed to spawn '{cmd}'"))
+    }
 
-        let mut child = Command::new(program)
+    /// Spawn with pre-split arguments and optional extra env vars (e.g. from a
+    /// claude_desktop_config.json `env` block). The child inherits the parent's
+    /// environment first; `extra_env` entries are then added or overridden.
+    /// Env values are not logged to avoid leaking secrets.
+    pub async fn spawn_with_args(
+        program: &str,
+        args: &[String],
+        extra_env: &HashMap<String, String>,
+    ) -> Result<Self> {
+        Self::spawn_inner(program, args, extra_env)
+            .await
+            .with_context(|| format!("failed to spawn '{program}'"))
+    }
+
+    async fn spawn_inner<S: AsRef<std::ffi::OsStr>>(
+        program: &str,
+        args: &[S],
+        extra_env: &HashMap<String, String>,
+    ) -> Result<Self> {
+        let mut command = Command::new(program);
+        command
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .with_context(|| format!("failed to spawn '{cmd}'"))?;
+            .stderr(Stdio::inherit());
+        for (k, v) in extra_env {
+            command.env(k, v);
+        }
+        let mut child = command.spawn()?;
 
         let stdin = child.stdin.take().expect("stdin piped");
         let stdout = child.stdout.take().expect("stdout piped");

@@ -19,10 +19,13 @@ Releases are git-tagged and carry pre-built binaries from **v0.12.0** onward. En
 - **OWASP/CWE SARIF compliance tags** — `Signal::tags()` method returns `OWASP:MCP-NN`, `OWASP:ASINN`, and `CWE-NNN` identifiers for all 28 signals. `sarif_rules()` now emits `properties.tags` on every rule, enabling GitHub Code Scanning, SonarQube, and other SARIF consumers to cross-reference findings against OWASP MCP Top 10, OWASP Agentic Top 10 (ASI series), and CWE without a separate mapping step (#77).
 - **Escape module stub** — `fuzz_escape()` implemented as a no-op in `src/fuzzer/escape.rs` and wired into the dispatch. Default scans (`--attacks escape` or via `all()`) no longer emit "warning: attack module 'escape' not yet implemented" (#78).
 
+- **Config-file-first audit** — `fuzzd audit --from-config <PATH>` reads a Claude Desktop or Cline `claude_desktop_config.json` and audits every configured MCP server in one pass. `--from-config auto` searches standard platform paths (macOS, Linux, Windows, Cline/VS Code). Each server is audited independently with all requested `--attacks` modules; findings are tagged `server-name/tool-name` and a per-server summary is printed after the run. `StdioTransport` gains `spawn_with_args()` for pre-split arguments and per-server `env` passthrough (env values are never logged). Gracefully skips servers that fail to start (#83).
+
 ### Changed
 - Scanner pass count: 4 → 5 (annotation contradiction check added as Pass 5).
 - Total signals: 27 → 28 (`AnnotationDeception` added as FUZZD-028).
 - Scanned surfaces: tools only → tools + prompts + resources (live audit with `--attacks tool_poisoning`).
+- `run_audit` split into `collect_audit_findings` (returns `(Vec<Finding>, usize)`) and `run_audit` (applies suppressions, writes report) — enables multi-server aggregation without duplicating logic.
 
 ### Removed
 - File-level `#![allow(dead_code)]` from `src/protocol/mcp.rs` and `src/protocol/session.rs` (temporary placeholder for HTTP wire-up). Replaced with targeted `#[allow(dead_code)]` on three specific utility items (`parse_error`, `invalid_request`, `internal_error` in `JsonRpcError`; `PING` constant; `Session::state()`).
