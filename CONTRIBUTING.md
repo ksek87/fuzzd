@@ -46,21 +46,21 @@ Transport, session, harness, reporter, and CLI changes.
 
 ## Before opening a PR
 
-Run all three checks locally:
+Run all four checks locally:
 
 ```bash
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo test
+./bench/run.sh   # always required — CI enforces this gate on every push
 ```
 
-If your change affects detection (new signals, new patterns, changed scoring), also run:
+The `benchmark` CI job enforces three hard gates on every push and PR:
+1. Representative fixture: zero false negatives (recall must be 1.0)
+2. Combined representative + clean dataset: zero false negatives and precision ≥ 0.90
+3. Actual MCPTox dataset: zero false positives
 
-```bash
-./bench/run.sh
-```
-
-Include the before/after detection rate in your PR description. The format used in CHANGELOG.md entries (`84.7% → 89.0% (+4.3pp)`) is the convention.
+If your change affects detection (new signals, new patterns, changed scoring), include the before/after detection rate in your PR description. The format used in CHANGELOG.md entries (`84.7% → 89.0% (+4.3pp)`) is the convention.
 
 ## Benchmark fixture
 
