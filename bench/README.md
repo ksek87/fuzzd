@@ -43,13 +43,15 @@ false positive rate.
 
 Detection counts are **duplicate-aware**: each of the 485 tool entries is scored independently, including entries that share a tool name (the dataset injects different attack payloads into the same base tool across paradigms). A tool entry is counted as detected if its name appears anywhere in the scan output.
 
-| | v0.9 | v0.10 | v0.11 | **v0.12** |
-|---|---|---|---|---|
-| **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | 440 / 485 (90.7%) | **440 / 485 (90.7%)** |
-| Unrelated Prerequisite | 60 / 77 (77.9%) | 63 / 77 (81.8%) | 65 / 77 (84.4%) | **65 / 77 (84.4%)** |
-| Fake Enabling Prerequisite | 146 / 183 (79.7%) | 152 / 183 (83.0%) | 155 / 183 (84.6%) | **155 / 183 (84.6%)** |
-| Argument Hijacking | 205 / 225 (91.1%) | 217 / 225 (96.4%) | 220 / 225 (97.7%) | **220 / 225 (97.7%)** |
-| **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
+| | v0.9 | v0.10 | v0.11 | v0.12 | **v0.13** |
+|---|---|---|---|---|---|
+| **Overall detection rate** | 411 / 485 (84.7%) | 432 / 485 (89.0%) | 440 / 485 (90.7%) | 440 / 485 (90.7%) | **440 / 485 (90.7%)** |
+| Unrelated Prerequisite | 60 / 77 (77.9%) | 63 / 77 (81.8%) | 65 / 77 (84.4%) | 65 / 77 (84.4%) | **65 / 77 (84.4%)** |
+| Fake Enabling Prerequisite | 146 / 183 (79.7%) | 152 / 183 (83.0%) | 155 / 183 (84.6%) | 155 / 183 (84.6%) | **155 / 183 (84.6%)** |
+| Argument Hijacking | 205 / 225 (91.1%) | 217 / 225 (96.4%) | 220 / 225 (97.7%) | 220 / 225 (97.7%) | **220 / 225 (97.7%)** |
+| **False positive rate** | 0 / 20 (0%) | 0 / 20 (0%) | 0 / 20 (0%) | 0 / 20 (0%) | **0 / 20 (0%)** |
+
+**v0.13 (no description-scan change):** Description scanner detection rate is unchanged from v0.12. The v0.13 release adds config-file-first audit (`--from-config`), FUZZD-028 annotation deception detection, prompts/resources surface scanning, OWASP/CWE SARIF compliance tags, and a benchmark regression CI gate. None of these affect the MCPTox description-scan detection numbers.
 
 **v0.12 (no description-scan change):** Description scanner detection rate is unchanged from v0.11. The v0.12.0 release introduced four new attack modules measured separately — protocol edge-case fuzzer (FUZZD-024), stateful sequence analyzer (FUZZD-025–027), scripted chain executor, and mock peer-tool injection — plus a response-phase scanner with 37 patterns targeting FUZZD-022/023. None of these affect the MCPTox description-scan benchmark, which measures static tool-description detection only.
 
@@ -94,14 +96,14 @@ on all 485 entries so no regeneration step is needed.
 | Argument Hijacking | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF + annotation check, 24 description signals)
+## Signal distribution (188 AC patterns + structural heuristic + semantic verb scanner + TF-IDF + annotation check, 28 signals total)
 
 > **Total signals: 28.** FUZZD-024 (`protocol_violation`) is emitted by the protocol fuzzer when a server crashes or mishandles a malformed JSON-RPC message. FUZZD-025–027 (`unexpected_tool_sequence`, `runtime_credential_access`, `unexpected_network_call`) are emitted by the chain-sequence analyzer at runtime and are not measured by this benchmark. FUZZD-028 (`annotation_deception`) is a static structural check and IS measured by this benchmark.
 
 | Signal | Role |
 |---|---|
 | `imperative_override` | Authority language ("MUST", "MANDATORY", "priority is higher than") |
-| `credential_reference` | Credential file paths (.ssh, .aws, .gcloud, .pgpass, .env, .cursor/mcp.json) |
+| `credential_reference` | Credential file paths (.ssh, .aws, .gcloud, .pgpass, .env, .cursor/mcp.json) and API key prefixes (AKIA, ghp_, sk-ant-, xoxb-, sk_live_, and 20+ others) |
 | `privileged_path` | Sensitive paths (/etc/passwd, /tmp/., /root/) |
 | `exfiltration_mechanism` | Network exfil (curl, wget, C2 URLs, pipe to shell, "provide the contents of") |
 | `stealth_language` | Concealment ("silently", "do not disclose", "never mention") |
@@ -127,7 +129,7 @@ on all 485 entries so no regeneration step is needed.
 
 The scanner runs five passes over each tool description, `inputSchema` fields, and `annotations`:
 
-**Pass 1 — Aho-Corasick (161 description patterns, 37 response patterns):** Single
+**Pass 1 — Aho-Corasick (188 description patterns, 37 response patterns):** Single
 O(N) sweep matching all needles simultaneously via a shared `OnceLock<AhoCorasick>`
 automaton built once per scanner. Fires Critical/High findings.
 

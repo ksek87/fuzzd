@@ -20,6 +20,7 @@ Releases are git-tagged and carry pre-built binaries from **v0.12.0** onward. En
 - **Escape module stub** — `fuzz_escape()` implemented as a no-op in `src/fuzzer/escape.rs` and wired into the dispatch. Default scans (`--attacks escape` or via `all()`) no longer emit "warning: attack module 'escape' not yet implemented" (#78).
 
 - **Config-file-first audit** — `fuzzd audit --from-config <PATH>` reads a Claude Desktop or Cline `claude_desktop_config.json` and audits every configured MCP server in one pass. `--from-config auto` searches standard platform paths (macOS, Linux, Windows, Cline/VS Code). Each server is audited independently with all requested `--attacks` modules; findings are tagged `server-name/tool-name` and a per-server summary is printed after the run. `StdioTransport` gains `spawn_with_args()` for pre-split arguments and per-server `env` passthrough (env values are never logged). Gracefully skips servers that fail to start (#83).
+- **Benchmark regression CI gate** — new `benchmark` job in `.github/workflows/ci.yml` runs after `test` and enforces three gating checks: (1) representative fixture — zero false negatives required (recall = 1.0); (2) combined representative + clean dataset — zero false negatives and precision ≥ 0.90; (3) actual MCPTox dataset — zero false positives. Any detection regression or new false positive blocks the build (#92).
 
 ### Changed
 - Scanner pass count: 4 → 5 (annotation contradiction check added as Pass 5).

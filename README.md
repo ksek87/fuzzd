@@ -36,6 +36,9 @@ fuzzd scan --schema ./tools.json
 # Live audit against a running MCP server (stdio)
 fuzzd audit --transport stdio --cmd "npx my-mcp-server"
 
+# Audit all servers configured in Claude Desktop or Cline in one pass
+fuzzd audit --from-config auto
+
 # CI gate: exits 1 on critical/high findings
 fuzzd scan --schema ./tools.json && echo "clean"
 ```
@@ -75,9 +78,9 @@ An agent chains tool calls across multiple steps. It iterates and adapts when it
 
 ### MCP Tool Poison Detection — `fuzzd scan`
 
-Static analysis of `tool.description` and `inputSchema` fields across **four detection passes**:
+Static analysis of `tool.description` and `inputSchema` fields across **five detection passes**:
 
-1. **161 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 21 detection signals. Critical/High severity.
+1. **188 Aho-Corasick pattern needles** — single O(N) sweep across all patterns simultaneously, 28 detection signals. Critical/High severity.
 2. **Structural heuristic** — 10-word sliding window for universal-scope relay/inclusion constructs (verb + quantifier + noun). Medium severity.
 3. **Semantic verb scanner** — argument-hijacking "when using X, VERB" extraction with GloVe 50d word-vector neighbourhood matching. Catches attack synonyms (reroute, supplant, mutate) not enumerable as AC needles. Medium severity.
 4. **TF-IDF semantic similarity** — Cosine similarity against six abstract attack archetypes (recipient substitution, BCC intercept, universal relay, argument override, inject-all, private data exfil). No model download; vocabulary built from archetype texts at first call. Low severity.
@@ -85,7 +88,7 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | Signal | What It Detects |
 |---|---|
 | `imperative_override` | "MUST", "MANDATORY POLICY", fake system rules |
-| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json`, `process.env` in responses |
+| `credential_reference` | `~/.ssh/id_rsa`, `.aws/credentials`, `.env`, `.cursor/mcp.json`, `process.env`; API key prefixes (`AKIA`, `ghp_`, `sk-ant-`, `xoxb-`, `sk_live_`, etc.) |
 | `privileged_path` | `/etc/passwd`, `/tmp/.hidden`, `/root/` |
 | `exfiltration_mechanism` | `curl -sf`, `\| sh`, C2 URLs, "provide the contents of" |
 | `stealth_language` | "silently", "do not disclose", "never mention" |
@@ -107,6 +110,11 @@ Static analysis of `tool.description` and `inputSchema` fields across **four det
 | `sampling_pipeline_hijack` | "route all queries through", "all queries must pass through" — captures full LLM pipeline |
 | `response_context_invalidation` | "system note:", `<system-reminder>`, "disregard the above", "this is test data", "actual instructions follow" — injected text that dismisses real tool output (Greshake et al. 2023; CVE-2025-55284; GH#22915) |
 | `forced_reexecution` | "result was incomplete", "task is not yet complete", "call this tool again", "retry with" — loop injection to exhaust resources or delay side-payloads (Chen et al. arXiv:2407.20859; Liu et al. arXiv:2601.10955) |
+| `protocol_violation` | Server crashes, hangs, or sends malformed JSON-RPC in response to edge-case protocol messages (emitted by the protocol fuzzer at runtime) |
+| `unexpected_tool_sequence` | Tool calls injected into the session relative to a benign baseline — surfaces Paradigm 2 TPA at runtime (emitted by the sequence analyzer) |
+| `runtime_credential_access` | Credential file paths appearing in live tool call *arguments* at runtime, not just descriptions (emitted by the sequence analyzer) |
+| `unexpected_network_call` | External URLs appearing in live tool call arguments where none appeared in the baseline run (emitted by the sequence analyzer) |
+| `annotation_deception` | MCP `readOnlyHint`/`destructiveHint`/`openWorldHint` contradicting the tool's description — suppresses client confirmation dialogs for destructive or network-reaching operations (arXiv:2603.22489) |
 
 ```
 $ fuzzd scan --schema tools.json
@@ -134,7 +142,7 @@ Type-boundary mutation engine derived from each tool's `inputSchema`. Generates:
 - Empty/null argument cases
 - Integer boundary values (22 extremes including `i64::MAX`, `i64::MIN`, -1, 0)
 - String mutations: oversized, null bytes, Unicode edge cases
-- 8 injection payload categories: path traversal, command injection, SQL, LDAP, NoSQL, format string, template injection, XML
+- 10 injection payload categories: path traversal, command injection, SQL, LDAP, NoSQL, format string, template injection, XML, SSRF, ReDoS
 - Required field omission cases (one per required field)
 - Unknown extra field injection
 
@@ -228,6 +236,11 @@ fuzzd audit --transport stdio --cmd "npx my-mcp-server"
 fuzzd audit --transport http --url http://localhost:8000 --output sarif
 fuzzd audit --transport stdio --cmd "node server.js" --attacks tool_poisoning,protocol
 
+# Audit all MCP servers from a config file in one pass
+fuzzd audit --from-config auto                              # auto-detect Claude Desktop / Cline config
+fuzzd audit --from-config ~/.config/claude/claude_desktop_config.json
+fuzzd audit --from-config ~/Library/Application\ Support/Claude/claude_desktop_config.json --output sarif
+
 # Run scripted multi-step attack chains (a JSON file or a directory of them)
 fuzzd audit --transport stdio --cmd "node server.js" --attacks chain --chains ./chains/
 
@@ -291,22 +304,23 @@ fuzzd/
 │   ├── github-actions.yml          # drop-in CI workflow
 │   └── README.md
 └── src/
-    ├── cli/mod.rs                  # clap: scan / corpus / audit subcommands
+    ├── cli/mod.rs                  # clap: scan / corpus / audit / --from-config subcommands
+    ├── config.rs                   # Claude Desktop / Cline config parser; auto_detect() for --from-config auto
     ├── protocol/
     │   ├── mcp.rs                  # MCP/JSON-RPC types + serde impls
     │   ├── session.rs              # Session<T> state machine (Unconnected → Ready → Closed)
     │   └── transport/
-    │       ├── stdio.rs            # StdioTransport: child process, newline-delimited JSON
+    │       ├── stdio.rs            # StdioTransport: child process, newline-delimited JSON; spawn_with_args()
     │       └── http.rs             # HttpTransport: POST /mcp, SSE /sse, Arc<Client>
     ├── runner/
     │   ├── harness.rs              # Harness<T>: enumerate_tools() with cache, call_tool()
     │   └── observer.rs             # Observer<T>: intercepts responses, runs ResponseScanner
     ├── fuzzer/
-    │   ├── mod.rs                  # Signal (21 variants), Finding, Pattern, Scanner (const-constructible)
-    │   ├── description.rs          # DescriptionScanner — 155 AC patterns + structural + semantic verb scanner
-    │   ├── response.rs             # ResponseScanner — 20 patterns for tool response injection
+    │   ├── mod.rs                  # Signal (28 variants), Finding, Pattern, Scanner (const-constructible)
+    │   ├── description.rs          # DescriptionScanner — 188 AC patterns + structural + semantic verb scanner
+    │   ├── response.rs             # ResponseScanner — 37 patterns for tool response injection
     │   ├── argument.rs             # ArgumentFuzzer — JSON Schema boundary mutation
-    │   └── payloads.rs             # 8 injection payload categories + 22 integer boundaries
+    │   └── payloads.rs             # 10 injection payload categories + 22 integer boundaries
     ├── corpus/
     │   ├── schema.rs               # AttackRecord, Category (6), Severity (5), Vector
     │   └── loader.rs               # Corpus::embedded() (OnceLock-cached) + load_file() + load_dir()
@@ -341,6 +355,7 @@ fuzzd/
 | Capability | Status |
 |---|---|
 | Static tool-poison scanning (description + `inputSchema`, 5 passes, 28 signals) | ✅ Shipped |
+| Config-file-first audit — `--from-config <PATH>` / `--from-config auto` (Claude Desktop, Cline/VS Code) | ✅ Shipped |
 | Prompts/resources surface scanning (`prompts/list`, `resources/list`) | ✅ Shipped |
 | Annotation deception detection — FUZZD-028 (`readOnlyHint`/`destructiveHint` contradictions) | ✅ Shipped |
 | HTTP transport (`--transport http --url`) | ✅ Shipped |
