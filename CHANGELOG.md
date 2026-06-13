@@ -13,6 +13,22 @@ Releases are git-tagged and carry pre-built binaries from **v0.12.0** onward. En
 ## [Unreleased]
 
 ### Added
+- **HTTP transport wired** — `fuzzd audit --transport http --url <URL>` now works. The `HttpTransport` implementation, CLI `--url` flag, and tests were already complete; this commit removes the `bail!()` stub and connects the live path (#71).
+- **FUZZD-028 `AnnotationDeception`** — new static signal that fires when MCP annotation hints (`readOnlyHint`, `destructiveHint`, `openWorldHint`) contradict the tool's description: e.g. `readOnlyHint: true` on a tool that describes delete/write/send operations. Clients use these hints to suppress confirmation dialogs; a false hint silently grants destructive or network-reaching permission. Research basis: arXiv:2603.22489 (Anon, Mar 2026). `ToolDefinition` gains an `annotations: Option<Value>` field per MCP spec 2025-11-05 (#75).
+- **Prompts/resources surface scanning** — `fuzzd audit --attacks tool_poisoning` now also enumerates `prompts/list` and `resources/list` and runs the full injection-detection pipeline on their descriptions (all four AC/structural/semantic/TF-IDF passes via `DescriptionScanner::scan_surface()`). Gracefully skips if the server does not implement these endpoints. Adds `PromptDefinition`, `ResourceDefinition`, `ListPromptsResult`, `ListResourcesResult` MCP types; `Session::list_prompts()`/`list_resources()` with caching; `Harness::enumerate_prompts()`/`enumerate_resources()` with lazy-cache pattern (#76).
+- **OWASP/CWE SARIF compliance tags** — `Signal::tags()` method returns `OWASP:MCP-NN`, `OWASP:ASINN`, and `CWE-NNN` identifiers for all 28 signals. `sarif_rules()` now emits `properties.tags` on every rule, enabling GitHub Code Scanning, SonarQube, and other SARIF consumers to cross-reference findings against OWASP MCP Top 10, OWASP Agentic Top 10 (ASI series), and CWE without a separate mapping step (#77).
+- **Escape module stub** — `fuzz_escape()` implemented as a no-op in `src/fuzzer/escape.rs` and wired into the dispatch. Default scans (`--attacks escape` or via `all()`) no longer emit "warning: attack module 'escape' not yet implemented" (#78).
+
+### Changed
+- Scanner pass count: 4 → 5 (annotation contradiction check added as Pass 5).
+- Total signals: 27 → 28 (`AnnotationDeception` added as FUZZD-028).
+- Scanned surfaces: tools only → tools + prompts + resources (live audit with `--attacks tool_poisoning`).
+
+### Removed
+- File-level `#![allow(dead_code)]` from `src/protocol/mcp.rs` and `src/protocol/session.rs` (temporary placeholder for HTTP wire-up). Replaced with targeted `#[allow(dead_code)]` on three specific utility items (`parse_error`, `invalid_request`, `internal_error` in `JsonRpcError`; `PING` constant; `Session::state()`).
+
+---
+
 - **JSON-RPC protocol edge-case fuzzer** (`fuzzer/protocol.rs`, #21) — the `protocol` attack module is now implemented (previously advertised in `--attacks` but a no-op). Sends malformed envelopes (missing `jsonrpc`, wrong version, non-scalar `id`, missing/unknown method, oversized method name) and lifecycle-ordering violations (`tools/call`/`tools/list` before `initialize`, second `initialize`) to a live stdio server, each against a freshly spawned session, and classifies the response: a well-formed JSON-RPC error is the only acceptable outcome; a crash is Critical, a hang High, a malformed/over-accepting reply Medium, an abrupt close Low.
 - FUZZD-024 `ProtocolViolation` signal — carries protocol-fuzzer findings through the existing reporter/SARIF pipeline.
 - **Stateful sequence analyzer** (`analyzer/`, #13/#14) — the foundation for the Agentic Chain Fuzzer theme. A `SequenceObserver` records the ordered tool-call sequence (tool + runtime arguments); the analyzer detects cross-step anomalies that the static scanner cannot see — credential paths and external URLs in *runtime arguments*, tool calls *injected* relative to a baseline run, and *cross-tool contamination* (a baseline tool's arguments gaining a sensitive value). `diff()` compares baseline vs. adversarial runs; a CVSS-inspired scorer maps each anomaly to a severity. `SequenceFinding` carries step/reproduction context and converts to the flat `Finding` for reporting. Exercised on recorded and synthetic sequences; the live executor (#15) and mock-peer injection (#16) that drive adversarial runs build on this.

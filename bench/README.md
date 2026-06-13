@@ -94,9 +94,9 @@ on all 485 entries so no regeneration step is needed.
 | Argument Hijacking | 15 / 15 (100%) |
 | **False positive rate** | **0 / 20 (0%)** |
 
-## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF, 23 description signals)
+## Signal distribution (161 AC patterns + structural heuristic + semantic verb scanner + TF-IDF + annotation check, 24 description signals)
 
-> **Total signals: 27.** FUZZD-024 (`protocol_violation`) is emitted by the protocol fuzzer when a server crashes or mishandles a malformed JSON-RPC message. FUZZD-025–027 (`unexpected_tool_sequence`, `runtime_credential_access`, `unexpected_network_call`) are emitted by the chain-sequence analyzer at runtime and are not measured by this benchmark.
+> **Total signals: 28.** FUZZD-024 (`protocol_violation`) is emitted by the protocol fuzzer when a server crashes or mishandles a malformed JSON-RPC message. FUZZD-025–027 (`unexpected_tool_sequence`, `runtime_credential_access`, `unexpected_network_call`) are emitted by the chain-sequence analyzer at runtime and are not measured by this benchmark. FUZZD-028 (`annotation_deception`) is a static structural check and IS measured by this benchmark.
 
 | Signal | Role |
 |---|---|
@@ -123,8 +123,9 @@ on all 485 entries so no regeneration step is needed.
 | `sampling_pipeline_hijack` | Tool inserted as mandatory intermediary for all agent queries |
 | `response_context_invalidation` | Injected text in a tool *response* dismissing or replacing legitimate output ("system note: disregard", `<system-reminder>`) |
 | `forced_reexecution` | Injected text instructing the agent to retry a tool call, creating a resource-amplification loop |
+| `annotation_deception` | MCP annotation hints (`readOnlyHint`, `destructiveHint`, `openWorldHint`) that contradict the tool's description — suppresses client confirmation dialogs for destructive operations (arXiv:2603.22489) |
 
-The scanner runs four passes over each tool description and `inputSchema` fields:
+The scanner runs five passes over each tool description, `inputSchema` fields, and `annotations`:
 
 **Pass 1 — Aho-Corasick (161 description patterns, 37 response patterns):** Single
 O(N) sweep matching all needles simultaneously via a shared `OnceLock<AhoCorasick>`
@@ -160,9 +161,11 @@ archetype texts at first call via `OnceLock`.
 | `append-inject-all` | `argument_interception` | MCPTox argument-hijacking / MCP-SafetyBench |
 | `private-data-exfil` | `exfiltration_mechanism` | Chen et al. MCP-UPD; MCPTox Privacy Leakage |
 
-All four passes share a single pre-computed lowercase copy of the description
-text, eliminating redundant `to_ascii_lowercase` allocations across passes 2–4.
-Each pass emits at most one finding per signal per text chunk (description or schema field).
+**Pass 5 — Annotation contradiction check (v0.13):** Structural check on the `annotations` object (if present). Fires `annotation_deception` (FUZZD-028) when `readOnlyHint: true` or `destructiveHint: false` coexists with destructive-operation language in the description, or `openWorldHint: false` coexists with network-operation language. O(1) per tool; no automaton required.
+
+All passes share a single pre-computed lowercase copy of the description text, eliminating redundant `to_ascii_lowercase` allocations across passes 2–5. Each pass emits at most one finding per signal per text chunk (description or schema field).
+
+**Scanned surfaces:** tool `description`, `inputSchema` fields (passes 1–4), `annotations` hints (pass 5), and — when running a live audit — `prompts/list` and `resources/list` descriptions (passes 1–4 via `scan_surface()`).
 
 ## Performance notes
 
