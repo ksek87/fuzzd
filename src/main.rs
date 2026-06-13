@@ -45,8 +45,7 @@ async fn main() -> Result<()> {
             }
             TransportKind::Http => {
                 let url = args.url.as_deref().expect("http transport requires --url");
-                let transport =
-                    protocol::transport::http::HttpTransport::connect(url).await?;
+                let transport = protocol::transport::http::HttpTransport::connect(url).await?;
                 run_audit(Harness::new(transport), &args).await?;
             }
         },
@@ -217,12 +216,16 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
             // Gracefully skip if the server doesn't implement these endpoints.
             if let Ok(prompts) = harness.enumerate_prompts().await {
                 findings.extend(DescriptionScanner::scan_surface(
-                    prompts.iter().map(|p| (p.name.as_str(), p.description.as_deref())),
+                    prompts
+                        .iter()
+                        .map(|p| (p.name.as_str(), p.description.as_deref())),
                 ));
             }
             if let Ok(resources) = harness.enumerate_resources().await {
                 findings.extend(DescriptionScanner::scan_surface(
-                    resources.iter().map(|r| (r.name.as_str(), r.description.as_deref())),
+                    resources
+                        .iter()
+                        .map(|r| (r.name.as_str(), r.description.as_deref())),
                 ));
             }
         }
