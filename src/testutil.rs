@@ -73,6 +73,7 @@ pub fn tool(name: &str, description: &str) -> ToolDefinition {
         name: name.to_string(),
         description: Some(description.to_string()),
         input_schema: json!({"type": "object"}),
+        annotations: None,
     }
 }
 
@@ -82,5 +83,6 @@ pub fn tool_no_desc(name: &str) -> ToolDefinition {
         name: name.to_string(),
         description: None,
         input_schema: json!({"type": "object"}),
+        annotations: None,
     }
 }

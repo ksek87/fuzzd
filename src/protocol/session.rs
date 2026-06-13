@@ -1,13 +1,11 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use anyhow::{anyhow, bail, Result};
 
 use crate::protocol::mcp::{
     methods, CallToolParams, CallToolResult, InitializeParams, InitializeResult, JsonRpcRequest,
-    ListToolsResult, ResponseOutcome, ToolDefinition,
+    ListPromptsResult, ListResourcesResult, ListToolsResult, PromptDefinition, ResourceDefinition,
+    ResponseOutcome, ToolDefinition,
 };
 use crate::protocol::transport::Transport;
 
@@ -25,6 +23,8 @@ pub struct Session<T: Transport> {
     counter: AtomicI64,
     pub server_info: Option<InitializeResult>,
     pub tools: Vec<ToolDefinition>,
+    pub prompts: Vec<PromptDefinition>,
+    pub resources: Vec<ResourceDefinition>,
 }
 
 impl<T: Transport> Session<T> {
@@ -35,6 +35,8 @@ impl<T: Transport> Session<T> {
             counter: AtomicI64::new(1),
             server_info: None,
             tools: Vec::new(),
+            prompts: Vec::new(),
+            resources: Vec::new(),
         }
     }
 
@@ -47,6 +49,8 @@ impl<T: Transport> Session<T> {
             counter: AtomicI64::new(1),
             server_info: None,
             tools: Vec::new(),
+            prompts: Vec::new(),
+            resources: Vec::new(),
         }
     }
 
@@ -97,6 +101,28 @@ impl<T: Transport> Session<T> {
         Ok(self.tools.clone())
     }
 
+    /// Fetch and cache the server's prompt list. Returns an error if the server
+    /// does not advertise the prompts capability — callers should handle gracefully.
+    pub async fn list_prompts(&mut self) -> Result<Vec<PromptDefinition>> {
+        self.require_ready()?;
+        let req = JsonRpcRequest::new(self.next_id(), methods::PROMPTS_LIST, None);
+        let resp = self.transport.send(req).await?;
+        let list: ListPromptsResult = serde_json::from_value(outcome_result(resp.outcome)?)?;
+        self.prompts = list.prompts;
+        Ok(self.prompts.clone())
+    }
+
+    /// Fetch and cache the server's resource list. Returns an error if the server
+    /// does not advertise the resources capability — callers should handle gracefully.
+    pub async fn list_resources(&mut self) -> Result<Vec<ResourceDefinition>> {
+        self.require_ready()?;
+        let req = JsonRpcRequest::new(self.next_id(), methods::RESOURCES_LIST, None);
+        let resp = self.transport.send(req).await?;
+        let list: ListResourcesResult = serde_json::from_value(outcome_result(resp.outcome)?)?;
+        self.resources = list.resources;
+        Ok(self.resources.clone())
+    }
+
     /// Call a tool by name with the given arguments.
     pub async fn call_tool(
         &mut self,
@@ -121,6 +147,7 @@ impl<T: Transport> Session<T> {
         )?)?)
     }
 
+    #[allow(dead_code)]
     pub fn state(&self) -> &SessionState {
         &self.state
     }

@@ -225,6 +225,9 @@ fn sarif_rules() -> Vec<serde_json::Value> {
                 "shortDescription": {"text": s.description()},
                 "defaultConfiguration": {"level": "error"},
                 "helpUri": "https://github.com/ksek87/fuzzd",
+                "properties": {
+                    "tags": s.tags(),
+                },
             })
         })
         .collect()
