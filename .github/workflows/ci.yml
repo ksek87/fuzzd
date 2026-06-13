@@ -49,3 +49,48 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release
+
+  benchmark:
+    name: Benchmark regression
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release
+      - name: Representative fixture — recall must be 1.0
+        run: |
+          out=$(./target/release/fuzzd benchmark --schema bench/mcptox_representative.json --output json)
+          fn=$(echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['fn'])")
+          recall=$(echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['recall'])")
+          echo "recall=$recall fn=$fn"
+          [ "$fn" = "0" ] || { echo "FAIL: fn=$fn (recall regression on representative fixture)"; exit 1; }
+      - name: Combined fixture — precision ≥ 0.90, recall 1.0
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess, sys, tempfile, os
+          attacks = json.load(open("bench/mcptox_representative.json"))
+          clean   = json.load(open("bench/clean_tools.json"))
+          combined = attacks + clean
+          with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+              json.dump(combined, f); fname = f.name
+          out = subprocess.check_output(
+              ["./target/release/fuzzd", "benchmark", "--schema", fname, "--output", "json"]
+          )
+          os.unlink(fname)
+          d = json.loads(out)
+          print(f"precision={d['precision']:.3f} recall={d['recall']:.3f} fp={d['fp']} fn={d['fn']}")
+          if d["fn"] != 0:
+              print(f"FAIL: fn={d['fn']} (recall regression)"); sys.exit(1)
+          if d["precision"] < 0.90:
+              print(f"FAIL: precision={d['precision']:.3f} < 0.90 (new false positives)"); sys.exit(1)
+          EOF
+      - name: Actual dataset — no false positives
+        run: |
+          out=$(./target/release/fuzzd benchmark --schema bench/mcptox_actual.json --output json)
+          fp=$(echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['fp'])")
+          recall=$(echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['recall'])")
+          echo "fp=$fp recall=$recall"
+          [ "$fp" = "0" ] || { echo "FAIL: fp=$fp (false positives on actual dataset)"; exit 1; }
