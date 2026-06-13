@@ -1,6 +1,7 @@
 pub mod argument;
 pub mod chain;
 pub mod description;
+pub mod escape;
 pub mod payloads;
 pub mod peer;
 pub mod protocol;
@@ -103,6 +104,14 @@ pub enum Signal {
     /// tokens). Serves as both a resource-exhaustion DoS and a cover channel that delays
     /// legitimate responses while side-payloads execute.
     ForcedReexecution,
+    /// MCP annotation hints (`readOnlyHint`, `destructiveHint`, `openWorldHint`) that contradict
+    /// the tool's actual description — e.g. `readOnlyHint: true` on a tool whose description
+    /// mentions delete/write/send operations. Clients use these hints to suppress user
+    /// confirmation dialogs; a false hint silently grants the attacker permission to perform
+    /// destructive or network-reaching operations without user approval.
+    /// Research basis: arXiv:2603.22489 (Anon, Mar 2026) — full threat model against the
+    /// MCP 2025-11-05 spec identifies the annotations field as an attack surface.
+    AnnotationDeception,
     /// A JSON-RPC protocol robustness violation detected by the protocol fuzzer:
     /// the server crashed, hung, accepted a malformed message, or replied with a
     /// non-JSON-RPC message instead of a well-formed error. Unlike the other
@@ -156,6 +165,7 @@ impl Signal {
         Self::UnexpectedToolSequence,
         Self::RuntimeCredentialAccess,
         Self::UnexpectedNetworkCall,
+        Self::AnnotationDeception,
     ];
 
     /// Prefer over `.to_string()` to avoid heap allocation in comparison paths.
@@ -188,6 +198,7 @@ impl Signal {
             Self::UnexpectedToolSequence => "unexpected_tool_sequence",
             Self::RuntimeCredentialAccess => "runtime_credential_access",
             Self::UnexpectedNetworkCall => "unexpected_network_call",
+            Self::AnnotationDeception => "annotation_deception",
         }
     }
 
@@ -221,6 +232,7 @@ impl Signal {
             Self::UnexpectedToolSequence => "FUZZD-025",
             Self::RuntimeCredentialAccess => "FUZZD-026",
             Self::UnexpectedNetworkCall => "FUZZD-027",
+            Self::AnnotationDeception => "FUZZD-028",
         }
     }
 
@@ -298,6 +310,43 @@ impl Signal {
             Self::UnexpectedNetworkCall => {
                 "A tool was invoked at runtime with an external URL/host in its arguments"
             }
+            Self::AnnotationDeception => {
+                "MCP annotation hints contradict the tool description — may suppress user confirmation dialogs for destructive operations"
+            }
+        }
+    }
+
+    /// OWASP MCP Top 10, OWASP Agentic Top 10, and CWE tags for SARIF rule properties.
+    pub fn tags(&self) -> &'static [&'static str] {
+        match self {
+            Self::ImperativeOverride => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::CredentialReference => &["OWASP:MCP-04", "OWASP:ASI02", "CWE-522"],
+            Self::PrivilegedPath => &["OWASP:MCP-04", "OWASP:ASI02", "CWE-200"],
+            Self::ExfiltrationMechanism => &["OWASP:MCP-03", "OWASP:ASI02", "CWE-200"],
+            Self::StealthLanguage => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-693"],
+            Self::SessionPersistence => &["OWASP:MCP-01", "OWASP:ASI05", "CWE-77"],
+            Self::CrossToolContamination => &["OWASP:MCP-01", "OWASP:ASI07", "CWE-77"],
+            Self::FakePrerequisite => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::ArgumentInterception => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::HtmlInjectionTag => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::ConditionalActivation => &["OWASP:MCP-06", "OWASP:ASI05", "CWE-693"],
+            Self::MessageHijacking => &["OWASP:MCP-09", "OWASP:ASI05", "CWE-940"],
+            Self::UnicodeObfuscation => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-116"],
+            Self::EmbeddedInstruction => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::AnsiEscapeObfuscation => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-116"],
+            Self::ToolSelectionBias => &["OWASP:MCP-05", "OWASP:ASI05", "CWE-345"],
+            Self::IdentityImpersonation => &["OWASP:MCP-05", "OWASP:ASI04", "CWE-290"],
+            Self::RawContentPassthrough => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::ValueSubstitution => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::ToolEnumerationRecon => &["OWASP:MCP-02", "OWASP:ASI02", "CWE-200"],
+            Self::SamplingPipelineHijack => &["OWASP:MCP-01", "OWASP:ASI05", "CWE-77"],
+            Self::ResponseContextInvalidation => &["OWASP:MCP-01", "OWASP:ASI01", "CWE-77"],
+            Self::ForcedReexecution => &["OWASP:MCP-08", "OWASP:ASI05", "CWE-400"],
+            Self::ProtocolViolation => &["OWASP:MCP-08", "OWASP:ASI05", "CWE-755"],
+            Self::UnexpectedToolSequence => &["OWASP:MCP-01", "OWASP:ASI05", "CWE-77"],
+            Self::RuntimeCredentialAccess => &["OWASP:MCP-04", "OWASP:ASI02", "CWE-522"],
+            Self::UnexpectedNetworkCall => &["OWASP:MCP-03", "OWASP:ASI02", "CWE-200"],
+            Self::AnnotationDeception => &["OWASP:MCP-05", "OWASP:ASI01", "CWE-290"],
         }
     }
 }

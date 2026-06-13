@@ -44,7 +44,9 @@ async fn main() -> Result<()> {
                 run_audit(Harness::new(transport), &args).await?;
             }
             TransportKind::Http => {
-                anyhow::bail!("HTTP transport not yet implemented — use --transport stdio");
+                let url = args.url.as_deref().expect("http transport requires --url");
+                let transport = protocol::transport::http::HttpTransport::connect(url).await?;
+                run_audit(Harness::new(transport), &args).await?;
             }
         },
         Command::Scan(args) => {
@@ -210,6 +212,22 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
 
         if unique_attacks.contains(&cli::AttackModule::ToolPoisoning) {
             findings.extend(DescriptionScanner::scan(&tools));
+            // Also scan prompts and resources — optional MCP surfaces.
+            // Gracefully skip if the server doesn't implement these endpoints.
+            if let Ok(prompts) = harness.enumerate_prompts().await {
+                findings.extend(DescriptionScanner::scan_surface(
+                    prompts
+                        .iter()
+                        .map(|p| (p.name.as_str(), p.description.as_deref())),
+                ));
+            }
+            if let Ok(resources) = harness.enumerate_resources().await {
+                findings.extend(DescriptionScanner::scan_surface(
+                    resources
+                        .iter()
+                        .map(|r| (r.name.as_str(), r.description.as_deref())),
+                ));
+            }
         }
 
         // Dynamic analysis — argument boundary fuzzer with response scanning.
@@ -229,15 +247,8 @@ async fn run_audit<T: Transport>(mut harness: Harness<T>, args: &cli::AuditArgs)
         harness.close().await?;
     }
 
-    for module in &unique_attacks {
-        match module {
-            cli::AttackModule::ToolPoisoning
-            | cli::AttackModule::Argument
-            | cli::AttackModule::Protocol
-            | cli::AttackModule::Chain
-            | cli::AttackModule::Peer => {}
-            other => eprintln!("warning: attack module '{other}' not yet implemented — skipping"),
-        }
+    if unique_attacks.contains(&cli::AttackModule::Escape) {
+        findings.extend(fuzzer::escape::fuzz_escape().await?);
     }
 
     let suppress = SuppressConfig::load_or_empty(std::path::Path::new(DEFAULT_SUPPRESS_PATH))?;

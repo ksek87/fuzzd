@@ -49,6 +49,7 @@ impl MockPeerServer {
                 name: tool_name.into(),
                 description: Some(tool_description.into()),
                 input_schema: json!({"type": "object", "properties": {}}),
+                annotations: None,
             },
         }
     }

@@ -1,6 +1,3 @@
-// Pending CLI wiring in the audit command (v0.3+).
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -69,6 +66,7 @@ pub struct JsonRpcError {
 }
 
 impl JsonRpcError {
+    #[allow(dead_code)]
     pub fn parse_error() -> Self {
         Self {
             code: -32700,
@@ -76,6 +74,7 @@ impl JsonRpcError {
             data: None,
         }
     }
+    #[allow(dead_code)]
     pub fn invalid_request() -> Self {
         Self {
             code: -32600,
@@ -90,6 +89,7 @@ impl JsonRpcError {
             data: None,
         }
     }
+    #[allow(dead_code)]
     pub fn internal_error() -> Self {
         Self {
             code: -32603,
@@ -140,6 +140,10 @@ pub struct InitializeResult {
 pub struct ServerCapabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<ToolsCapability>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompts: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resources: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -161,6 +165,56 @@ pub struct ToolDefinition {
     pub description: Option<String>,
     #[serde(rename = "inputSchema")]
     pub input_schema: Value,
+    /// MCP spec 2025-11-05: optional hints about tool behaviour used by clients to
+    /// suppress confirmation dialogs. Attackers can set readOnlyHint/destructiveHint
+    /// to mislead clients — scanned by the annotation-deception detector (FUZZD-028).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PromptArgument {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PromptDefinition {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arguments: Vec<PromptArgument>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListPromptsResult {
+    pub prompts: Vec<PromptDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceDefinition {
+    pub uri: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ListResourcesResult {
+    pub resources: Vec<ResourceDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -199,6 +253,9 @@ pub mod methods {
     pub const INITIALIZED: &str = "notifications/initialized";
     pub const TOOLS_LIST: &str = "tools/list";
     pub const TOOLS_CALL: &str = "tools/call";
+    pub const PROMPTS_LIST: &str = "prompts/list";
+    pub const RESOURCES_LIST: &str = "resources/list";
+    #[allow(dead_code)]
     pub const PING: &str = "ping";
 }
 

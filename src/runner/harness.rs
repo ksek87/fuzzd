@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::protocol::mcp::{CallToolResult, ToolDefinition};
+use crate::protocol::mcp::{CallToolResult, PromptDefinition, ResourceDefinition, ToolDefinition};
 use crate::protocol::session::Session;
 use crate::protocol::transport::Transport;
 
@@ -33,6 +33,28 @@ impl<T: Transport> Harness<T> {
     #[allow(dead_code)]
     pub fn tools(&self) -> &[ToolDefinition] {
         &self.session.tools
+    }
+
+    /// Returns the prompt list, fetching on first call then caching.
+    /// Returns an error if the server does not support prompts/list — callers should
+    /// handle with `if let Ok(...)` rather than propagating.
+    pub async fn enumerate_prompts(&mut self) -> Result<Vec<PromptDefinition>> {
+        if self.session.prompts.is_empty() {
+            self.session.list_prompts().await
+        } else {
+            Ok(self.session.prompts.clone())
+        }
+    }
+
+    /// Returns the resource list, fetching on first call then caching.
+    /// Returns an error if the server does not support resources/list — callers should
+    /// handle with `if let Ok(...)` rather than propagating.
+    pub async fn enumerate_resources(&mut self) -> Result<Vec<ResourceDefinition>> {
+        if self.session.resources.is_empty() {
+            self.session.list_resources().await
+        } else {
+            Ok(self.session.resources.clone())
+        }
     }
 
     pub async fn call_tool(&mut self, name: &str, args: Option<Value>) -> Result<CallToolResult> {

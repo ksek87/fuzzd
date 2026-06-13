@@ -340,7 +340,11 @@ fuzzd/
 
 | Capability | Status |
 |---|---|
-| Static tool-poison scanning (description + `inputSchema`, 4 passes, 23 signals) | ✅ Shipped |
+| Static tool-poison scanning (description + `inputSchema`, 5 passes, 28 signals) | ✅ Shipped |
+| Prompts/resources surface scanning (`prompts/list`, `resources/list`) | ✅ Shipped |
+| Annotation deception detection — FUZZD-028 (`readOnlyHint`/`destructiveHint` contradictions) | ✅ Shipped |
+| HTTP transport (`--transport http --url`) | ✅ Shipped |
+| SARIF compliance tags — OWASP MCP Top 10, OWASP Agentic Top 10, CWE on every rule | ✅ Shipped |
 | Response-phase injection scanning | ✅ Shipped |
 | Argument boundary / injection fuzzing | ✅ Shipped |
 | Corpus + schema + loader | ✅ Shipped |
