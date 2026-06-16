@@ -82,13 +82,25 @@ cargo build --release
 
 All must be green. Record the benchmark numbers — they go into the PR description.
 
-## Phase 7 — Commit, tag, and push
+## Phase 7 — Commit and push
 
 ```bash
 git add Cargo.toml Cargo.lock CHANGELOG.md bench/README.md README.md
 git commit -m "chore: release vX.Y.Z"
+git push -u origin <branch>
+```
+
+**Important:** if you're working on a feature branch (the normal workflow), open or
+update the PR and wait for it to merge before tagging. The tag must point to a commit
+on `main`, not a feature branch.
+
+Once the PR is merged into `main`:
+
+```bash
+git fetch origin main
+git checkout main
+git pull origin main
 git tag -a vX.Y.Z -m "fuzzd vX.Y.Z"
-git push origin main
 git push origin vX.Y.Z
 ```
 
