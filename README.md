@@ -25,7 +25,7 @@ It operates at the **tool boundary layer** — scanning `tool.description` field
 
 ```bash
 # Pre-built binaries for Linux x86_64, macOS (Intel + Apple Silicon), Windows x86_64
-# available from v0.12.0 at https://github.com/ksek87/fuzzd/releases
+# available from v0.13.0 at https://github.com/ksek87/fuzzd/releases
 
 # Install from source
 cargo install --git https://github.com/ksek87/fuzzd
@@ -148,11 +148,11 @@ Type-boundary mutation engine derived from each tool's `inputSchema`. Generates:
 
 ### Attack Corpus
 
-29 embedded attack records organized across three categories:
+30 embedded attack records organized across three categories:
 
 | Category | Records | Sources |
 |---|---|---|
-| `tool_poisoning` | TPA-001..023 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection; MCP-UPD parasitic toolchain; Trivial Trojans; message hijacking; unicode obfuscation; response context invalidation (CVE-2025-55284; GH#22915); forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955) |
+| `tool_poisoning` | TPA-001..024 | MCPTox paradigms 1–3 (Wang et al.); Invariant Labs XML injection; MCP-UPD parasitic toolchain; Trivial Trojans; message hijacking; unicode obfuscation; response context invalidation (CVE-2025-55284; GH#22915); forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955); annotation deception (arXiv:2603.22489) |
 | `tool_shadowing` | TS-001..003 | MCPSecBench: name squatting, capability override, typosquatting |
 | `rug_pull` | RUG-001..003 | Invariant Labs sleeper; MCPSecBench invocation-count and time-delayed |
 
@@ -175,7 +175,7 @@ Each record encodes a known attack pattern with full provenance:
 
 ### Response Scanner
 
-Scans tool *responses* (`CallToolResult`) for embedded prompt-injection patterns — covering the attack class where the tool description is clean but the server poisons the agent through its output. 39 patterns across model-specific injection tokens, cross-tool injection commands, indirect instruction injection, response context invalidation (GH#22915; CVE-2025-55284), and forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955).
+Scans tool *responses* (`CallToolResult`) for embedded prompt-injection patterns — covering the attack class where the tool description is clean but the server poisons the agent through its output. 37 patterns across model-specific injection tokens, cross-tool injection commands, indirect instruction injection, response context invalidation (GH#22915; CVE-2025-55284), and forced re-execution loops (arXiv:2407.20859; arXiv:2601.10955).
 
 ---
 
@@ -348,8 +348,7 @@ fuzzd/
 
 > **Themes ≠ release numbers.** Roadmap work is organised by *theme* (a body of
 > work that may span several releases), not by a fixed version ladder. A release
-> is tagged and numbered when it ships. Current release: **v0.12.0** — the first
-> git-tagged release with pre-built cross-platform binaries. The canonical,
+> is tagged and numbered when it ships. Current release: **v0.13.0**. The canonical,
 > always-current roadmap lives in [issue #26](https://github.com/ksek87/fuzzd/issues/26).
 
 | Capability | Status |
@@ -376,7 +375,7 @@ fuzzd/
 
 **Distribution** *(active)*
 Make fuzzd installable and CI-droppable, backing the "90.7%, production-grade"
-claims with real artifacts. v0.12.0 ships cross-platform binaries (linux x86_64,
+claims with real artifacts. v0.13.0 ships cross-platform binaries (linux x86_64,
 macOS x86_64 + aarch64, windows x86_64) via `release.yml`. Next: an in-repo
 composite GitHub Action ([#66](https://github.com/ksek87/fuzzd/issues/66)) that
 runs `fuzzd scan` and uploads SARIF to Code Scanning, with upload-before-fail
